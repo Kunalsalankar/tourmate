@@ -1,7 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:firebase_auth/firebase_auth.dart'; // Add this import
 import '../core/colors.dart';
 import '../cubit/navigation_cubit.dart';
+import '../user/home_screen.dart'; // Import your user home screen
+import '../user/sign_in_screen.dart'; // Import your sign in screen
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -33,6 +36,24 @@ class _SplashScreenState extends State<SplashScreen>
     );
 
     _animationController.forward();
+
+    // Add this to check auth state after animation
+    Future.delayed(const Duration(seconds: 2), _checkAuthAndNavigate);
+  }
+
+  Future<void> _checkAuthAndNavigate() async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user != null) {
+      // User is signed in, navigate to home
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => UserHomeScreen()),
+      );
+    } else {
+      // Not signed in, navigate to sign in
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => SignInScreen()),
+      );
+    }
   }
 
   @override
@@ -69,13 +90,11 @@ class _SplashScreenState extends State<SplashScreen>
                             Container(
                               padding: const EdgeInsets.all(20),
                               decoration: BoxDecoration(
-                                color: AppColors.surface.withValues(alpha: 0.1),
+                                color: AppColors.surface.withOpacity(0.1),
                                 borderRadius: BorderRadius.circular(20),
                                 boxShadow: [
                                   BoxShadow(
-                                    color: AppColors.textPrimary.withValues(
-                                      alpha: 0.2,
-                                    ),
+                                    color: AppColors.textPrimary.withOpacity(0.2),
                                     blurRadius: 20,
                                     offset: const Offset(0, 10),
                                   ),
@@ -99,9 +118,7 @@ class _SplashScreenState extends State<SplashScreen>
                                   Shadow(
                                     offset: Offset(2, 2),
                                     blurRadius: 4,
-                                    color: AppColors.textPrimary.withValues(
-                                      alpha: 0.26,
-                                    ),
+                                    color: AppColors.textPrimary.withOpacity(0.26),
                                   ),
                                 ],
                               ),
@@ -111,9 +128,7 @@ class _SplashScreenState extends State<SplashScreen>
                               'Your Ultimate Travel Companion',
                               style: TextStyle(
                                 fontSize: 18,
-                                color: AppColors.textOnPrimary.withValues(
-                                  alpha: 0.7,
-                                ),
+                                color: AppColors.textOnPrimary.withOpacity(0.7),
                                 letterSpacing: 1,
                               ),
                             ),
@@ -124,48 +139,7 @@ class _SplashScreenState extends State<SplashScreen>
                   },
                 ),
                 const SizedBox(height: 80),
-                AnimatedBuilder(
-                  animation: _fadeAnimation,
-                  builder: (context, child) {
-                    return FadeTransition(
-                      opacity: _fadeAnimation,
-                      child: Container(
-                        width: double.infinity,
-                        margin: const EdgeInsets.symmetric(horizontal: 40),
-                        child: ElevatedButton(
-                          onPressed: () {
-                            context
-                                .read<NavigationCubit>()
-                                .navigateToRoleSelection();
-                          },
-                          style: ElevatedButton.styleFrom(
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 40,
-                              vertical: 18,
-                            ),
-                            backgroundColor: AppColors.surface,
-                            foregroundColor: AppColors.primary,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(30),
-                            ),
-                            elevation: 8,
-                            shadowColor: AppColors.textPrimary.withValues(
-                              alpha: 0.3,
-                            ),
-                          ),
-                          child: const Text(
-                            'Get Started',
-                            style: TextStyle(
-                              fontSize: 20,
-                              fontWeight: FontWeight.bold,
-                              letterSpacing: 1,
-                            ),
-                          ),
-                        ),
-                      ),
-                    );
-                  },
-                ),
+                // Remove the Get Started button, navigation is now automatic
               ],
             ),
           ),

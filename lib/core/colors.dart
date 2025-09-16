@@ -86,3 +86,4 @@ class AppColors {
   static const Color snackbarInfo = Color(0xFF2196F3); // Blue
 }
 
+

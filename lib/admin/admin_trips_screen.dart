@@ -545,7 +545,7 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
             _buildDetailRow('Destination', trip.destination),
             _buildDetailRow('Time', _formatDateTime(trip.time)),
             _buildDetailRow('Mode', trip.mode),
-            _buildDetailRow('User ID', trip.userId),
+          //  _buildDetailRow('User ID', trip.userId),
             _buildDetailRow('Created', _formatDateTime(trip.createdAt)),
             if (trip.activities.isNotEmpty) ...[
               const SizedBox(height: 8),

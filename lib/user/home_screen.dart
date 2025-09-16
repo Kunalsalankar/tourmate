@@ -6,6 +6,7 @@ import '../core/models/trip_model.dart';
 import '../cubit/trip_cubit.dart';
 import '../core/repositories/trip_repository.dart';
 import '../widgets/trip_form_widget.dart';
+import '../cubit/bottom_nav_cubit.dart';
 
 /// User Home Screen with trip creation and management functionality
 /// This screen provides the main interface for users to create, view, and manage their trips
@@ -34,48 +35,87 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: _tripCubit,
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          title: const Text(
-            'Tourmate',
-            style: TextStyle(
-              color: AppColors.appBarText,
-              fontWeight: FontWeight.bold,
-              fontSize: 24,
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: _tripCubit),
+        BlocProvider(create: (_) => BottomNavCubit()),
+      ],
+      child: BlocBuilder<BottomNavCubit, int>(
+        builder: (context, selectedIndex) {
+          return Scaffold(
+            backgroundColor: AppColors.background,
+            appBar: AppBar(
+              title: const Text(
+                'Tourmate',
+                style: TextStyle(
+                  color: AppColors.appBarText,
+                  fontWeight: FontWeight.bold,
+                  fontSize: 24,
+                ),
+              ),
+              backgroundColor: AppColors.appBarBackground,
+              elevation: 0,
+              actions: [
+                IconButton(
+                  onPressed: _signOut,
+                  icon: const Icon(Icons.logout, color: AppColors.appBarText),
+                  tooltip: 'Sign Out',
+                ),
+              ],
             ),
-          ),
-          backgroundColor: AppColors.appBarBackground,
-          elevation: 0,
-          actions: [
-            IconButton(
-              onPressed: _signOut,
-              icon: const Icon(Icons.logout, color: AppColors.appBarText),
-              tooltip: 'Sign Out',
+            body: IndexedStack(
+              index: selectedIndex,
+              children: [
+                // Home tab
+                Column(
+                  children: [
+                    _buildWelcomeSection(),
+                    _buildQuickStats(),
+                    Expanded(child: _buildTripsList()),
+                  ],
+                ),
+                // Notifications tab (placeholder)
+                Center(
+                  child: Text(
+                    'No notifications yet!',
+                    style: TextStyle(
+                      fontSize: 18,
+                      color: AppColors.textSecondary,
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ],
-        ),
-        body: Column(
-          children: [
-            _buildWelcomeSection(),
-            _buildQuickStats(),
-            Expanded(child: _buildTripsList()),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton.extended(
-          onPressed: _createNewTrip,
-          backgroundColor: AppColors.buttonPrimary,
-          icon: const Icon(Icons.add, color: AppColors.textOnPrimary),
-          label: const Text(
-            'New Trip',
-            style: TextStyle(
-              color: AppColors.textOnPrimary,
-              fontWeight: FontWeight.bold,
+            floatingActionButton: selectedIndex == 0
+                ? FloatingActionButton.extended(
+                    onPressed: _createNewTrip,
+                    backgroundColor: AppColors.buttonPrimary,
+                    icon: const Icon(Icons.add, color: AppColors.textOnPrimary),
+                    label: const Text(
+                      'New Trip',
+                      style: TextStyle(
+                        color: AppColors.textOnPrimary,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  )
+                : null,
+            bottomNavigationBar: BottomNavigationBar(
+              currentIndex: selectedIndex,
+              onTap: (index) => context.read<BottomNavCubit>().selectTab(index),
+              backgroundColor: AppColors.surface,
+              selectedItemColor: AppColors.primary,
+              unselectedItemColor: AppColors.textSecondary,
+              items: const [
+                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
+                BottomNavigationBarItem(
+                  icon: Icon(Icons.notifications),
+                  label: 'Notifications',
+                ),
+              ],
             ),
-          ),
-        ),
+          );
+        },
       ),
     );
   }

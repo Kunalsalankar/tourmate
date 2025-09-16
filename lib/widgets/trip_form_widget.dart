@@ -333,7 +333,7 @@ class _TripFormWidgetState extends State<TripFormWidget> {
             const Text(
               'Accompanying Travellers',
               style: TextStyle(
-                fontSize: 18,
+                fontSize: 14,
                 fontWeight: FontWeight.bold,
                 color: AppColors.textPrimary,
               ),
@@ -346,12 +346,16 @@ class _TripFormWidgetState extends State<TripFormWidget> {
               ),
               label: const Text(
                 'Add Traveller',
-                style: TextStyle(color: AppColors.textOnPrimary),
+                style: TextStyle(
+                  color: AppColors.textOnPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: AppColors.buttonSecondary,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius: BorderRadius.circular(6),
                 ),
               ),
             ),
