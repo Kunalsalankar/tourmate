@@ -5,6 +5,8 @@ import '../models/trip_model.dart';
 /// Repository class for handling Trip-related Firestore operations
 /// This class provides methods to interact with the Firestore database
 /// for trip creation, retrieval, updating, and deletion
+/// 
+/// all the backened of the analytic is done here
 class TripRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;

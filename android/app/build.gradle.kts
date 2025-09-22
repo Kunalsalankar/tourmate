@@ -17,10 +17,11 @@ android {
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
+        isCoreLibraryDesugaringEnabled = true
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11.toString()
+        jvmTarget = "11"
     }
 
     defaultConfig {
@@ -47,5 +48,10 @@ flutter {
     source = "../.."
 }
 
+
+dependencies {
+    coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
+}
 // Apply the Google services plugin for Firebase
+apply(plugin = "com.google.gms.google-services")
 apply(plugin = "com.google.gms.google-services")

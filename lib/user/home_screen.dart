@@ -1,12 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:overlay_support/overlay_support.dart';
 import '../core/colors.dart';
 import '../core/models/trip_model.dart';
 import '../cubit/trip_cubit.dart';
 import '../core/repositories/trip_repository.dart';
 import '../widgets/trip_form_widget.dart';
 import '../cubit/bottom_nav_cubit.dart';
+import '../cubit/notification_cubit.dart';
 
 /// User Home Screen with trip creation and management functionality
 /// This screen provides the main interface for users to create, view, and manage their trips
@@ -39,81 +41,101 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       providers: [
         BlocProvider.value(value: _tripCubit),
         BlocProvider(create: (_) => BottomNavCubit()),
+        BlocProvider(create: (_) => NotificationCubit()),
       ],
       child: BlocBuilder<BottomNavCubit, int>(
         builder: (context, selectedIndex) {
-          return Scaffold(
-            backgroundColor: AppColors.background,
-            appBar: AppBar(
-              title: const Text(
-                'Tourmate',
-                style: TextStyle(
-                  color: AppColors.appBarText,
-                  fontWeight: FontWeight.bold,
-                  fontSize: 24,
-                ),
-              ),
-              backgroundColor: AppColors.appBarBackground,
-              elevation: 0,
-              actions: [
-                IconButton(
-                  onPressed: _signOut,
-                  icon: const Icon(Icons.logout, color: AppColors.appBarText),
-                  tooltip: 'Sign Out',
-                ),
-              ],
-            ),
-            body: IndexedStack(
-              index: selectedIndex,
-              children: [
-                // Home tab
-                Column(
-                  children: [
-                    _buildWelcomeSection(),
-                    _buildQuickStats(),
-                    Expanded(child: _buildTripsList()),
-                  ],
-                ),
-                // Notifications tab (placeholder)
-                Center(
-                  child: Text(
-                    'No notifications yet!',
+          return BlocListener<NotificationCubit, NotificationState>(
+
+              listener: (context, state) {
+                if (state.message != null && state.message!.isNotEmpty) {
+                  showSimpleNotification(
+                    Text(
+                      state.message!,
+                      style: TextStyle(color: AppColors.textOnPrimary),
+                    ),
+                    background: AppColors.primary,
+                  );
+                }
+              },
+              child: Scaffold(
+                backgroundColor: AppColors.background,
+                appBar: AppBar(
+                  title: const Text(
+                    'Tourmate',
                     style: TextStyle(
-                      fontSize: 18,
-                      color: AppColors.textSecondary,
+                      color: AppColors.appBarText,
+                      fontWeight: FontWeight.bold,
+                      fontSize: 24,
                     ),
                   ),
-                ),
-              ],
-            ),
-            floatingActionButton: selectedIndex == 0
-                ? FloatingActionButton.extended(
-                    onPressed: _createNewTrip,
-                    backgroundColor: AppColors.buttonPrimary,
-                    icon: const Icon(Icons.add, color: AppColors.textOnPrimary),
-                    label: const Text(
-                      'New Trip',
-                      style: TextStyle(
-                        color: AppColors.textOnPrimary,
-                        fontWeight: FontWeight.bold,
+                  backgroundColor: AppColors.appBarBackground,
+                  elevation: 0,
+                  actions: [
+                    IconButton(
+                      onPressed: _signOut,
+                      icon: const Icon(
+                        Icons.logout,
+                        color: AppColors.appBarText,
                       ),
+                      tooltip: 'Sign Out',
                     ),
-                  )
-                : null,
-            bottomNavigationBar: BottomNavigationBar(
-              currentIndex: selectedIndex,
-              onTap: (index) => context.read<BottomNavCubit>().selectTab(index),
-              backgroundColor: AppColors.surface,
-              selectedItemColor: AppColors.primary,
-              unselectedItemColor: AppColors.textSecondary,
-              items: const [
-                BottomNavigationBarItem(icon: Icon(Icons.home), label: 'Home'),
-                BottomNavigationBarItem(
-                  icon: Icon(Icons.notifications),
-                  label: 'Notifications',
+                  ],
                 ),
-              ],
-            ),
+                body: IndexedStack(
+                  index: selectedIndex,
+                  children: [
+                    // Home tab
+                    Column(
+                      children: [
+                        _buildWelcomeSection(),
+                        _buildQuickStats(),
+                        Expanded(child: _buildTripsList()),
+                        // Example: Button to trigger a notification
+                       
+                      ],
+                    ),
+                    
+                   
+                  ],
+                ),
+                floatingActionButton: selectedIndex == 0
+                    ? FloatingActionButton.extended(
+                        onPressed: _createNewTrip,
+                        backgroundColor: AppColors.buttonPrimary,
+                        icon: const Icon(
+                          Icons.add,
+                          color: AppColors.textOnPrimary,
+                        ),
+                        label: const Text(
+                          'New Trip',
+                          style: TextStyle(
+                            color: AppColors.textOnPrimary,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      )
+                    : null,
+                bottomNavigationBar: BottomNavigationBar(
+                  currentIndex: selectedIndex,
+                  onTap: (index) =>
+                      context.read<BottomNavCubit>().selectTab(index),
+                  backgroundColor: AppColors.surface,
+                  selectedItemColor: AppColors.primary,
+                  unselectedItemColor: AppColors.textSecondary,
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.home),
+                      label: 'Home',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.notifications),
+                      label: 'Notifications',
+                    ),
+                  ],
+                ),
+              ),
+            
           );
         },
       ),
@@ -151,10 +173,22 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               color: AppColors.textOnPrimary.withValues(alpha: 0.8),
             ),
           ),
-          const SizedBox(height: 8),
-          const Text(
-            'Ready to plan your next adventure?',
-            style: TextStyle(fontSize: 14, color: AppColors.textOnPrimary),
+        
+          const SizedBox(height: 16),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.of(context).pushNamed('/navigation');
+            },
+            icon: const Icon(Icons.navigation, color: AppColors.textOnPrimary),
+            label: const Text(
+              'Start Navigation',
+              style: TextStyle(color: AppColors.textOnPrimary),
+            ),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.buttonPrimary,
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
           ),
         ],
       ),
@@ -316,12 +350,12 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.explore_outlined, size: 80, color: AppColors.textLight),
+          Icon(Icons.explore_outlined, size: 0, color: AppColors.textLight),
           const SizedBox(height: 16),
           Text(
             'No trips yet',
             style: TextStyle(
-              fontSize: 24,
+              fontSize: 16,
               fontWeight: FontWeight.bold,
               color: AppColors.textPrimary,
             ),
@@ -329,25 +363,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           const SizedBox(height: 8),
           Text(
             'Start your journey by creating your first trip!',
-            style: TextStyle(fontSize: 16, color: AppColors.textSecondary),
+            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
             textAlign: TextAlign.center,
           ),
-          const SizedBox(height: 24),
-          ElevatedButton.icon(
-            onPressed: _createNewTrip,
-            icon: const Icon(Icons.add, color: AppColors.textOnPrimary),
-            label: const Text(
-              'Create First Trip',
-              style: TextStyle(color: AppColors.textOnPrimary),
-            ),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppColors.buttonPrimary,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-          ),
+         
         ],
       ),
     );

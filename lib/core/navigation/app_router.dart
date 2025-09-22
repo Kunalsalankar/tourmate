@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import '../../screens/splash_screen.dart';
 import '../../screens/role_selection_screen.dart';
+import '../../screens/navigation_screen.dart';
 import '../../user/sign_in_screen.dart';
 import '../../user/sign_up/sign_up_screen.dart';
 import '../../admin/sign_up/admin_sign_in_screen.dart';
 import '../../admin/sign_up/admin_sign_up_screen.dart';
 import '../../user/home_screen.dart';
 import '../../admin/admin_trips_screen.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import '../../cubit/maps_navigation_cubit.dart';
 
 class AppRouter {
   static const String splash = '/';
@@ -17,6 +20,7 @@ class AppRouter {
   static const String adminSignUp = '/admin-sign-up';
   static const String userHome = '/user-home';
   static const String adminTrips = '/admin-trips';
+  static const String navigation = '/navigation';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -50,6 +54,14 @@ class AppRouter {
           builder: (_) => const AdminSignUpScreen(),
           settings: settings,
         );
+      case navigation:
+  return MaterialPageRoute(
+    builder: (_) => BlocProvider(
+      create: (_) => MapsNavigationCubit(),
+      child: const NavigationScreen(),
+    ),
+    settings: settings,
+  );
       case userHome:
         return MaterialPageRoute(
           builder: (_) => const UserHomeScreen(),

@@ -1,8 +1,8 @@
+// ignore_for_file: deprecated_member_use
+
 import 'package:flutter/material.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart'; // Add this import
 import '../core/colors.dart';
-import '../cubit/navigation_cubit.dart';
 import '../user/home_screen.dart'; // Import your user home screen
 import '../user/sign_in_screen.dart'; // Import your sign in screen
 

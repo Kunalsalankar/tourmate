@@ -1,12 +1,23 @@
+// main.dart
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import 'package:overlay_support/overlay_support.dart';
 import 'firebase_options.dart';
 import 'app/app.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // Load environment variables
+  await dotenv.load(fileName: '.env');
+  
+  // Initialize Firebase
   await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-  runApp(const MyApp());
+  
+  runApp(
+    OverlaySupport.global(
+      child: const MyApp(),
+    ),
+  );
 }
-
-// Main app widget moved to app/app.dart for better structure.
