@@ -46,6 +46,17 @@ class TripCubit extends Cubit<TripState> {
     }
   }
 
+  /// Get trips by type (active, past, future)
+  Future<void> getTripsByType(TripType type) async {
+    emit(TripLoading());
+    try {
+      final trips = await _tripRepository.getTripsByType(type.toString().split('.').last);
+      emit(TripLoaded(trips));
+    } catch (e) {
+      emit(TripError(e.toString()));
+    }
+  }
+
   /// Get a specific trip by ID
   Future<void> getTripById(String tripId) async {
     emit(TripLoading());

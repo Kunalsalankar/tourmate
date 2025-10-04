@@ -19,12 +19,23 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
   late TripCubit _tripCubit;
   String _selectedFilter = 'all';
   String _searchQuery = '';
+  int _currentTabIndex = 0;
+  final List<TripType> _tripTypes = TripType.values;
 
   @override
   void initState() {
     super.initState();
     _tripCubit = TripCubit(tripRepository: TripRepository());
-    _tripCubit.getAllTrips();
+    _loadTrips();
+  }
+
+  void _loadTrips() {
+    if (_currentTabIndex == 0) {
+      _tripCubit.getAllTrips();
+    } else {
+      // For admin, we still load all trips but will filter them locally
+      _tripCubit.getAllTrips();
+    }
   }
 
   @override
@@ -60,6 +71,8 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
         body: Column(
           children: [
             _buildStatsSection(),
+            _buildTripTypeTabs(),
+            const SizedBox(height: 8),
             _buildFilterSection(),
             Expanded(child: _buildTripsList()),
           ],
@@ -180,6 +193,61 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
           style: TextStyle(fontSize: 12, color: color.withValues(alpha: 0.8)),
         ),
       ],
+    );
+  }
+
+  Widget _buildTripTypeTabs() {
+    return Container(
+      height: 50,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _buildTripTypeTab('All', 0),
+          _buildTripTypeTab('Active', 1),
+          _buildTripTypeTab('Past', 2),
+          _buildTripTypeTab('Future', 3),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTripTypeTab(String label, int index) {
+    final isSelected = _currentTabIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _currentTabIndex = index;
+          });
+        },
+        child: Container(
+          margin: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : AppColors.textSecondary,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
 
@@ -324,6 +392,14 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
   List<TripModel> _filterTrips(List<TripModel> trips) {
     var filteredTrips = trips;
 
+    // Filter by trip type
+    if (_currentTabIndex > 0) {
+      final selectedType = _tripTypes[_currentTabIndex - 1];
+      filteredTrips = filteredTrips
+          .where((trip) => trip.tripType == selectedType)
+          .toList();
+    }
+
     // Filter by transport mode
     if (_selectedFilter != 'all') {
       filteredTrips = filteredTrips
@@ -371,10 +447,28 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
   }
 
   Widget _buildTripCard(TripModel trip) {
+    // Determine trip type for styling
+    Color typeColor;
+    IconData typeIcon;
+    
+    if (trip.time.isAfter(DateTime.now().add(const Duration(days: 1)))) {
+      typeColor = Colors.blue;
+      typeIcon = Icons.upcoming;
+    } else if (trip.time.isAfter(DateTime.now())) {
+      typeColor = Colors.green;
+      typeIcon = Icons.timer;
+    } else {
+      typeColor = Colors.grey;
+      typeIcon = Icons.history;
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: typeColor.withOpacity(0.2), width: 1),
+      ),
       child: InkWell(
         onTap: () => _viewTripDetails(trip),
         borderRadius: BorderRadius.circular(12),
@@ -386,33 +480,67 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Text(
-                      trip.tripNumber,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: typeColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(typeIcon, size: 20, color: typeColor),
                       ),
-                    ),
+                      const SizedBox(width: 12),
+                      Text(
+                        trip.tripNumber,
+                        style: const TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: AppColors.textPrimary,
+                        ),
+                      ),
+                    ],
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 8,
-                      vertical: 4,
-                    ),
-                    decoration: BoxDecoration(
-                      color: AppColors.primaryLight,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      trip.mode,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.primary,
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: typeColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          trip.tripType.toString().split('.').last.toUpperCase(),
+                          style: TextStyle(
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            color: typeColor,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 8),
+                      Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryLight,
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Text(
+                          trip.mode,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.bold,
+                            color: AppColors.primary,
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -541,9 +669,15 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildDetailRow('Trip Number', trip.tripNumber),
+            _buildDetailRow('Trip Type', trip.tripType.toString().split('.').last.toUpperCase()),
             _buildDetailRow('Origin', trip.origin),
             _buildDetailRow('Destination', trip.destination),
-            _buildDetailRow('Time', _formatDateTime(trip.time)),
+            _buildDetailRow(
+              trip.tripType == TripType.past ? 'Start Time' : 'Time',
+              _formatDateTime(trip.time),
+            ),
+            if (trip.tripType == TripType.past && trip.endTime != null)
+              _buildDetailRow('End Time', _formatDateTime(trip.endTime!)),
             _buildDetailRow('Mode', trip.mode),
           //  _buildDetailRow('User ID', trip.userId),
             _buildDetailRow('Created', _formatDateTime(trip.createdAt)),
@@ -599,7 +733,7 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
   }
 
   void _refreshTrips() {
-    _tripCubit.getAllTrips();
+    _loadTrips();
   }
 
   void _signOut() async {

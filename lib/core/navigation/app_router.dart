@@ -55,13 +55,17 @@ class AppRouter {
           settings: settings,
         );
       case navigation:
-  return MaterialPageRoute(
-    builder: (_) => BlocProvider(
-      create: (_) => MapsNavigationCubit(),
-      child: const NavigationScreen(),
-    ),
-    settings: settings,
-  );
+        final args = settings.arguments as Map<String, dynamic>?;
+        return MaterialPageRoute(
+          builder: (_) => BlocProvider(
+            create: (_) => MapsNavigationCubit(),
+            child: NavigationScreen(
+              initialOrigin: args?['origin'] as String?,
+              initialDestination: args?['destination'] as String?,
+            ),
+          ),
+          settings: settings,
+        );
       case userHome:
         return MaterialPageRoute(
           builder: (_) => const UserHomeScreen(),

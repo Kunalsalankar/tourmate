@@ -12,7 +12,14 @@ import '../core/services/route_tracking_service.dart';
 import '../core/services/connectivity_service.dart';
 
 class NavigationScreen extends StatefulWidget {
-  const NavigationScreen({super.key});
+  final String? initialOrigin;
+  final String? initialDestination;
+  
+  const NavigationScreen({
+    super.key,
+    this.initialOrigin,
+    this.initialDestination,
+  });
 
   @override
   State<NavigationScreen> createState() => _NavigationScreenState();
@@ -64,6 +71,23 @@ class _NavigationScreenState extends State<NavigationScreen> {
         _showConnectivityWarning();
       }
     });
+    
+    // Pre-fill origin and destination if provided
+    if (widget.initialOrigin != null) {
+      _originController.text = widget.initialOrigin!;
+      // Trigger search to auto-populate
+      Future.delayed(const Duration(milliseconds: 500), () {
+        _searchOrigin(widget.initialOrigin!);
+      });
+    }
+    
+    if (widget.initialDestination != null) {
+      _destinationController.text = widget.initialDestination!;
+      // Trigger search to auto-populate
+      Future.delayed(const Duration(milliseconds: 800), () {
+        _searchDestination(widget.initialDestination!);
+      });
+    }
   }
 
   @override

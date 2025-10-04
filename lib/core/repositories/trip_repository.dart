@@ -54,7 +54,7 @@ class TripRepository {
           .get();
 
       return querySnapshot.docs
-          .map((doc) => TripModel.fromMap(doc.data(), doc.id))
+          .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
           .toList();
     } catch (e) {
       throw Exception('Failed to get user trips: $e');
@@ -70,10 +70,55 @@ class TripRepository {
           .get();
 
       return querySnapshot.docs
-          .map((doc) => TripModel.fromMap(doc.data(), doc.id))
+          .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
           .toList();
     } catch (e) {
       throw Exception('Failed to get all trips: $e');
+    }
+  }
+
+  /// Get trips by type (active, past, future)
+  Future<List<TripModel>> getTripsByType(String type) async {
+    try {
+      final userId = currentUserId;
+      if (userId == null) {
+        throw Exception('User not authenticated');
+      }
+
+      final now = DateTime.now();
+      Query query = _firestore
+          .collection(_collectionName)
+          .where('userId', isEqualTo: userId);
+
+      // Apply date filters based on trip type
+      switch (type) {
+        case 'active':
+          // Active trips are those that have started but not yet ended
+          query = query
+              .where('time', isLessThanOrEqualTo: Timestamp.fromDate(now))
+              .where('time', isGreaterThanOrEqualTo: Timestamp.fromDate(now.subtract(const Duration(days: 1))));
+          break;
+        case 'past':
+          // Past trips are those that ended before now
+          query = query.where('time', isLessThan: Timestamp.fromDate(now));
+          break;
+        case 'future':
+          // Future trips are those that start after now
+          query = query.where('time', isGreaterThan: Timestamp.fromDate(now));
+          break;
+        default:
+          // Default to all trips
+          break;
+      }
+
+      query = query.orderBy('time', descending: type != 'future');
+      final querySnapshot = await query.get();
+
+      return querySnapshot.docs
+          .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+          .toList();
+    } catch (e) {
+      throw Exception('Failed to get $type trips: $e');
     }
   }
 
@@ -143,7 +188,7 @@ class TripRepository {
           .get();
 
       return querySnapshot.docs
-          .map((doc) => TripModel.fromMap(doc.data(), doc.id))
+          .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
           .toList();
     } catch (e) {
       throw Exception('Failed to get trips by date range: $e');
@@ -166,7 +211,7 @@ class TripRepository {
           .get();
 
       return querySnapshot.docs
-          .map((doc) => TripModel.fromMap(doc.data(), doc.id))
+          .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
           .toList();
     } catch (e) {
       throw Exception('Failed to get trips by mode: $e');
@@ -187,7 +232,7 @@ class TripRepository {
           .get();
 
       final trips = querySnapshot.docs
-          .map((doc) => TripModel.fromMap(doc.data(), doc.id))
+          .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
           .toList();
 
       // Calculate statistics
@@ -233,7 +278,7 @@ class TripRepository {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map((doc) => TripModel.fromMap(doc.data(), doc.id))
+              .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
               .toList(),
         );
   }
@@ -246,7 +291,7 @@ class TripRepository {
         .snapshots()
         .map(
           (snapshot) => snapshot.docs
-              .map((doc) => TripModel.fromMap(doc.data(), doc.id))
+              .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
               .toList(),
         );
   }

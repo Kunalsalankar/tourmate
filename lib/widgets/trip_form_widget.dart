@@ -26,6 +26,8 @@ class _TripFormWidgetState extends State<TripFormWidget> {
   final _activityController = TextEditingController();
 
   DateTime _selectedTime = DateTime.now();
+  DateTime? _selectedEndTime;
+  TripType _selectedTripType = TripType.active;
   List<String> _activities = [];
   List<TravellerInfo> _accompanyingTravellers = [];
 
@@ -57,8 +59,10 @@ class _TripFormWidgetState extends State<TripFormWidget> {
     _destinationController.text = trip.destination;
     _modeController.text = trip.mode;
     _selectedTime = trip.time;
+    _selectedEndTime = trip.endTime;
     _activities = List.from(trip.activities);
     _accompanyingTravellers = List.from(trip.accompanyingTravellers);
+    _selectedTripType = trip.tripType;
   }
 
   @override
@@ -102,7 +106,13 @@ class _TripFormWidgetState extends State<TripFormWidget> {
               const SizedBox(height: 16),
               _buildTimeField(),
               const SizedBox(height: 16),
+              if (_selectedTripType == TripType.past) ...[
+                _buildEndTimeField(),
+                const SizedBox(height: 16),
+              ],
               _buildModeField(),
+              const SizedBox(height: 16),
+              _buildTripTypeField(),
               const SizedBox(height: 16),
               _buildActivitiesSection(),
               const SizedBox(height: 16),
@@ -224,6 +234,76 @@ class _TripFormWidgetState extends State<TripFormWidget> {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildEndTimeField() {
+    return InkWell(
+      onTap: _selectEndTime,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          border: Border.all(color: AppColors.inputBorder),
+          borderRadius: BorderRadius.circular(12),
+          color: AppColors.inputBackground,
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.event_available, color: AppColors.iconPrimary),
+            const SizedBox(width: 12),
+            Text(
+              _selectedEndTime != null
+                  ? 'End Time: ${_formatDateTime(_selectedEndTime!)}'
+                  : 'Select End Time',
+              style: TextStyle(
+                fontSize: 16,
+                color: _selectedEndTime != null
+                    ? AppColors.textPrimary
+                    : AppColors.textSecondary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildTripTypeField() {
+    return DropdownButtonFormField<TripType>(
+      value: _selectedTripType,
+      decoration: InputDecoration(
+        labelText: 'Trip Type',
+        prefixIcon: const Icon(
+          Icons.timeline,
+          color: AppColors.iconPrimary,
+        ),
+        border: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.inputBorder),
+        ),
+        focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12),
+          borderSide: const BorderSide(color: AppColors.inputBorderFocused),
+        ),
+        filled: true,
+        fillColor: AppColors.inputBackground,
+      ),
+      items: TripType.values.map((type) {
+        return DropdownMenuItem<TripType>(
+          value: type,
+          child: Text(
+            type.toString().split('.').last[0].toUpperCase() + 
+            type.toString().split('.').last.substring(1),
+          ),
+        );
+      }).toList(),
+      onChanged: (value) {
+        if (value != null) {
+          setState(() {
+            _selectedTripType = value;
+          });
+        }
+      },
     );
   }
 
@@ -459,7 +539,20 @@ class _TripFormWidgetState extends State<TripFormWidget> {
               backgroundColor: AppColors.snackbarSuccess,
             ),
           );
-          Navigator.of(context).pop();
+          
+          // Navigate to navigation screen if trip type is active and not editing
+          if (!widget.isEditing && _selectedTripType == TripType.active) {
+            Navigator.of(context).pop(); // Pop the form
+            Navigator.of(context).pushNamed(
+              '/navigation',
+              arguments: {
+                'origin': _originController.text.trim(),
+                'destination': _destinationController.text.trim(),
+              },
+            );
+          } else {
+            Navigator.of(context).pop();
+          }
         } else if (state is TripError) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -527,6 +620,34 @@ class _TripFormWidgetState extends State<TripFormWidget> {
     }
   }
 
+  void _selectEndTime() async {
+    final date = await showDatePicker(
+      context: context,
+      initialDate: _selectedEndTime ?? _selectedTime,
+      firstDate: _selectedTime,
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+
+    if (date != null && mounted) {
+      final time = await showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(_selectedEndTime ?? _selectedTime),
+      );
+
+      if (time != null && mounted) {
+        setState(() {
+          _selectedEndTime = DateTime(
+            date.year,
+            date.month,
+            date.day,
+            time.hour,
+            time.minute,
+          );
+        });
+      }
+    }
+  }
+
   void _addActivity() {
     final activity = _activityController.text.trim();
     if (activity.isNotEmpty && !_activities.contains(activity)) {
@@ -562,7 +683,9 @@ class _TripFormWidgetState extends State<TripFormWidget> {
         origin: _originController.text.trim(),
         destination: _destinationController.text.trim(),
         time: _selectedTime,
+        endTime: _selectedTripType == TripType.past ? _selectedEndTime : null,
         mode: _modeController.text,
+        tripType: _selectedTripType,
         activities: _activities,
         accompanyingTravellers: _accompanyingTravellers,
         userId: '', // Will be set by the repository

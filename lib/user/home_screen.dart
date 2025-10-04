@@ -22,11 +22,22 @@ class UserHomeScreen extends StatefulWidget {
 class _UserHomeScreenState extends State<UserHomeScreen> {
   late TripCubit _tripCubit;
 
+  int _currentTabIndex = 0;
+  final List<TripType> _tripTypes = TripType.values;
+
   @override
   void initState() {
     super.initState();
     _tripCubit = TripCubit(tripRepository: TripRepository());
-    _tripCubit.getUserTrips();
+    _loadTrips();
+  }
+
+  void _loadTrips() {
+    if (_currentTabIndex == 0) {
+      _tripCubit.getUserTrips();
+    } else {
+      _tripCubit.getTripsByType(_tripTypes[_currentTabIndex - 1]);
+    }
   }
 
   @override
@@ -90,9 +101,9 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                       children: [
                         _buildWelcomeSection(),
                         _buildQuickStats(),
+                        _buildTripTypeTabs(),
+                        const SizedBox(height: 8),
                         Expanded(child: _buildTripsList()),
-                        // Example: Button to trigger a notification
-                       
                       ],
                     ),
                     
@@ -191,6 +202,62 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildTripTypeTabs() {
+    return Container(
+      height: 50,
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          _buildTripTypeTab('All', 0),
+          _buildTripTypeTab('Active', 1),
+          _buildTripTypeTab('Past', 2),
+          _buildTripTypeTab('Future', 3),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTripTypeTab(String label, int index) {
+    final isSelected = _currentTabIndex == index;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () {
+          setState(() {
+            _currentTabIndex = index;
+            _loadTrips();
+          });
+        },
+        child: Container(
+          margin: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: isSelected ? AppColors.primary : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? Colors.white : AppColors.textSecondary,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
@@ -316,7 +383,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                 ),
                 const SizedBox(height: 16),
                 ElevatedButton(
-                  onPressed: () => _tripCubit.getUserTrips(),
+                  onPressed: _loadTrips,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.buttonPrimary,
                   ),
@@ -330,7 +397,26 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           );
         } else if (state is TripLoaded) {
           if (state.trips.isEmpty) {
-            return _buildEmptyState();
+            return Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.card_travel, size: 64, color: Colors.grey),
+                  const SizedBox(height: 16),
+                  Text(
+                    _currentTabIndex == 0 
+                      ? 'No trips found' 
+                      : 'No ${_tripTypes[_currentTabIndex - 1].toString().split('.').last} trips',
+                    style: const TextStyle(fontSize: 16, color: Colors.grey),
+                  ),
+                  if (_currentTabIndex == 0)
+                    TextButton(
+                      onPressed: _createNewTrip,
+                      child: const Text('Create your first trip!'),
+                    ),
+                ],
+              ),
+            );
           }
           return ListView.builder(
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -373,10 +459,28 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   Widget _buildTripCard(TripModel trip) {
+    // Determine trip type for styling
+    Color typeColor;
+    IconData typeIcon;
+    
+    if (trip.time.isAfter(DateTime.now().add(const Duration(days: 1)))) {
+      typeColor = Colors.blue;
+      typeIcon = Icons.upcoming;
+    } else if (trip.time.isAfter(DateTime.now())) {
+      typeColor = Colors.green;
+      typeIcon = Icons.timer;
+    } else {
+      typeColor = Colors.grey;
+      typeIcon = Icons.history;
+    }
+
     return Card(
       margin: const EdgeInsets.only(bottom: 12),
       elevation: 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: typeColor.withOpacity(0.2), width: 1),
+      ),
       child: InkWell(
         onTap: () => _viewTripDetails(trip),
         borderRadius: BorderRadius.circular(12),
@@ -388,149 +492,75 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Expanded(
-                    child: Text(
-                      trip.tripNumber,
-                      style: const TextStyle(
-                        fontSize: 18,
-                        fontWeight: FontWeight.bold,
-                        color: AppColors.textPrimary,
-                      ),
-                    ),
-                  ),
-                  PopupMenuButton<String>(
-                    onSelected: (value) => _handleTripAction(value, trip),
-                    itemBuilder: (context) => [
-                      const PopupMenuItem(
-                        value: 'edit',
-                        child: Row(
-                          children: [
-                            Icon(Icons.edit, color: AppColors.iconPrimary),
-                            SizedBox(width: 8),
-                            Text('Edit'),
-                          ],
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: typeColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(8),
                         ),
+                        child: Icon(typeIcon, size: 24, color: typeColor),
                       ),
-                      const PopupMenuItem(
-                        value: 'delete',
-                        child: Row(
-                          children: [
-                            Icon(Icons.delete, color: AppColors.error),
-                            SizedBox(width: 8),
-                            Text('Delete'),
-                          ],
-                        ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${trip.origin} to ${trip.destination}',
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Trip #${trip.tripNumber} • ${trip.mode}',
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: Colors.grey[600],
+                            ),
+                          ),
+                        ],
                       ),
                     ],
                   ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: typeColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      trip.tripType.toString().split('.').last.toUpperCase(),
+                      style: TextStyle(
+                        color: typeColor,
+                        fontSize: 10,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
               Row(
                 children: [
-                  Icon(
-                    Icons.location_on,
-                    size: 16,
-                    color: AppColors.iconSecondary,
-                  ),
+                  const Icon(Icons.access_time, size: 16, color: Colors.grey),
                   const SizedBox(width: 4),
                   Expanded(
                     child: Text(
-                      '${trip.origin} → ${trip.destination}',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                      ),
+                      trip.tripType == TripType.past && trip.endTime != null
+                          ? 'Start: ${_formatDateTime(trip.time)}\nEnd: ${_formatDateTime(trip.endTime!)}'
+                          : _formatDateTime(trip.time),
+                      style: const TextStyle(fontSize: 12, color: Colors.grey),
                     ),
+                  ),
+                  Text(
+                    '${trip.accompanyingTravellers.length + 1} ${trip.accompanyingTravellers.length == 0 ? 'Person' : 'People'}' ,
+                    style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
               ),
-              const SizedBox(height: 4),
-              Row(
-                children: [
-                  Icon(
-                    Icons.access_time,
-                    size: 16,
-                    color: AppColors.iconSecondary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    _formatDateTime(trip.time),
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 14,
-                    ),
-                  ),
-                  const SizedBox(width: 16),
-                  Icon(
-                    Icons.directions_car,
-                    size: 16,
-                    color: AppColors.iconSecondary,
-                  ),
-                  const SizedBox(width: 4),
-                  Text(
-                    trip.mode,
-                    style: const TextStyle(
-                      color: AppColors.textSecondary,
-                      fontSize: 14,
-                    ),
-                  ),
-                ],
-              ),
-              if (trip.accompanyingTravellers.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    Icon(
-                      Icons.people,
-                      size: 16,
-                      color: AppColors.iconSecondary,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      '${trip.accompanyingTravellers.length} traveller${trip.accompanyingTravellers.length > 1 ? 's' : ''}',
-                      style: const TextStyle(
-                        color: AppColors.textSecondary,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-              if (trip.activities.isNotEmpty) ...[
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 4,
-                  runSpacing: 4,
-                  children: trip.activities.take(3).map((activity) {
-                    return Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 8,
-                        vertical: 2,
-                      ),
-                      decoration: BoxDecoration(
-                        color: AppColors.primaryLight.withValues(alpha: 0.2),
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        activity,
-                        style: const TextStyle(
-                          fontSize: 12,
-                          color: AppColors.primary,
-                        ),
-                      ),
-                    );
-                  }).toList(),
-                ),
-                if (trip.activities.length > 3)
-                  Text(
-                    '+${trip.activities.length - 3} more',
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: AppColors.textSecondary,
-                    ),
-                  ),
-              ],
             ],
           ),
         ),
@@ -539,14 +569,17 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   void _createNewTrip() {
-    Navigator.of(context).push(
+    Navigator.push(
+      context,
       MaterialPageRoute(
         builder: (context) => BlocProvider.value(
           value: _tripCubit,
           child: const TripFormWidget(),
         ),
       ),
-    );
+    ).then((_) {
+      _loadTrips();
+    });
   }
 
   void _viewTripDetails(TripModel trip) {
@@ -566,7 +599,12 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           children: [
             _buildDetailRow('Origin', trip.origin),
             _buildDetailRow('Destination', trip.destination),
-            _buildDetailRow('Time', _formatDateTime(trip.time)),
+            _buildDetailRow(
+              trip.tripType == TripType.past ? 'Start Time' : 'Time',
+              _formatDateTime(trip.time),
+            ),
+            if (trip.tripType == TripType.past && trip.endTime != null)
+              _buildDetailRow('End Time', _formatDateTime(trip.endTime!)),
             _buildDetailRow('Mode', trip.mode),
             if (trip.activities.isNotEmpty) ...[
               const SizedBox(height: 8),

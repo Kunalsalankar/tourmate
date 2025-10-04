@@ -1,5 +1,11 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+enum TripType {
+  active,
+  past,
+  future,
+}
+
 /// Trip model class representing travel information
 /// This model captures all the required trip details as specified in the requirements
 class TripModel {
@@ -7,6 +13,7 @@ class TripModel {
   final String tripNumber;
   final String origin;
   final DateTime time;
+  final DateTime? endTime;
   final String mode;
   final String destination;
   final List<String> activities;
@@ -14,12 +21,14 @@ class TripModel {
   final String userId;
   final DateTime createdAt;
   final DateTime updatedAt;
+  final TripType tripType;
 
   TripModel({
     this.id,
     required this.tripNumber,
     required this.origin,
     required this.time,
+    this.endTime,
     required this.mode,
     required this.destination,
     required this.activities,
@@ -27,6 +36,7 @@ class TripModel {
     required this.userId,
     required this.createdAt,
     required this.updatedAt,
+    required this.tripType,
   });
 
   /// Convert TripModel to Map for Firestore storage
@@ -35,6 +45,7 @@ class TripModel {
       'tripNumber': tripNumber,
       'origin': origin,
       'time': Timestamp.fromDate(time),
+      'endTime': endTime != null ? Timestamp.fromDate(endTime!) : null,
       'mode': mode,
       'destination': destination,
       'activities': activities,
@@ -44,6 +55,7 @@ class TripModel {
       'userId': userId,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'tripType': tripType.toString().split('.').last,
     };
   }
 
@@ -54,6 +66,7 @@ class TripModel {
       tripNumber: map['tripNumber'] ?? '',
       origin: map['origin'] ?? '',
       time: (map['time'] as Timestamp).toDate(),
+      endTime: map['endTime'] != null ? (map['endTime'] as Timestamp).toDate() : null,
       mode: map['mode'] ?? '',
       destination: map['destination'] ?? '',
       activities: List<String>.from(map['activities'] ?? []),
@@ -65,6 +78,10 @@ class TripModel {
       userId: map['userId'] ?? '',
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       updatedAt: (map['updatedAt'] as Timestamp).toDate(),
+      tripType: TripType.values.firstWhere(
+        (e) => e.toString() == 'TripType.${map['tripType'] ?? 'active'}' ,
+        orElse: () => TripType.active,
+      ),
     );
   }
 
@@ -74,6 +91,7 @@ class TripModel {
     String? tripNumber,
     String? origin,
     DateTime? time,
+    DateTime? endTime,
     String? mode,
     String? destination,
     List<String>? activities,
@@ -81,12 +99,14 @@ class TripModel {
     String? userId,
     DateTime? createdAt,
     DateTime? updatedAt,
+    TripType? tripType,
   }) {
     return TripModel(
       id: id ?? this.id,
       tripNumber: tripNumber ?? this.tripNumber,
       origin: origin ?? this.origin,
       time: time ?? this.time,
+      endTime: endTime ?? this.endTime,
       mode: mode ?? this.mode,
       destination: destination ?? this.destination,
       activities: activities ?? this.activities,
@@ -95,6 +115,7 @@ class TripModel {
       userId: userId ?? this.userId,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      tripType: tripType ?? this.tripType,
     );
   }
 
