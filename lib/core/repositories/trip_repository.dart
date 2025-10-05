@@ -111,7 +111,7 @@ class TripRepository {
           break;
       }
 
-      query = query.orderBy('time', descending: type != 'future');
+      query = query.orderBy('time', descending: false);
       final querySnapshot = await query.get();
 
       return querySnapshot.docs
