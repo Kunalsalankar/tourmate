@@ -113,8 +113,12 @@ class MapsNavigationCubit extends Cubit<MapsNavigationState> {
 
   MapsNavigationCubit() : super(MapsNavigationInitial());
 
+  bool _isInitialized = false;
+
   /// Initialize navigation services
   Future<void> initialize() async {
+    if (_isInitialized) return; // Skip if already initialized
+    
     emit(MapsNavigationLoading());
 
     try {
@@ -126,15 +130,28 @@ class MapsNavigationCubit extends Cubit<MapsNavigationState> {
       // Get current position
       final position = await _locationService.getCurrentPosition();
 
+      _isInitialized = true;
       emit(MapsNavigationReady(currentPosition: position));
     } catch (e) {
       emit(MapsNavigationError('Failed to initialize navigation: $e'));
     }
   }
 
+  /// Lazy initialization - only initialize maps service for search
+  Future<void> _ensureMapsServiceInitialized() async {
+    try {
+      await _mapsService.initialize();
+    } catch (e) {
+      // Maps service initialization failed, but don't block search
+      print('Maps service initialization warning: $e');
+    }
+  }
+
   /// Search for places using the Places API
   Future<List<PlaceModel>> searchPlaces(String query) async {
     try {
+      // Ensure maps service is initialized (lightweight, only loads API key)
+      await _ensureMapsServiceInitialized();
       return await _mapsService.searchPlaces(query);
     } catch (e) {
       emit(MapsNavigationError('Failed to search places: $e'));

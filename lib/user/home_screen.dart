@@ -27,6 +27,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
   int _currentTabIndex = 0;
   final List<TripType> _tripTypes = TripType.values;
+  bool _isCreatingTrip = false;
 
   @override
   void initState() {
@@ -115,15 +116,26 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                 ),
                 floatingActionButton: selectedIndex == 0
                     ? FloatingActionButton.extended(
-                        onPressed: _createNewTrip,
-                        backgroundColor: AppColors.buttonPrimary,
-                        icon: const Icon(
-                          Icons.add,
-                          color: AppColors.textOnPrimary,
-                        ),
-                        label: const Text(
-                          'New Trip',
-                          style: TextStyle(
+                        onPressed: _isCreatingTrip ? null : _createNewTrip,
+                        backgroundColor: _isCreatingTrip 
+                            ? AppColors.buttonPrimary.withOpacity(0.6)
+                            : AppColors.buttonPrimary,
+                        icon: _isCreatingTrip
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: AppColors.textOnPrimary,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Icon(
+                                Icons.add,
+                                color: AppColors.textOnPrimary,
+                              ),
+                        label: Text(
+                          _isCreatingTrip ? 'Loading...' : 'New Trip',
+                          style: const TextStyle(
                             color: AppColors.textOnPrimary,
                             fontWeight: FontWeight.bold,
                           ),
@@ -468,40 +480,50 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: typeColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.all(8),
+                          decoration: BoxDecoration(
+                            color: typeColor.withOpacity(0.1),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          child: Icon(typeIcon, size: 24, color: typeColor),
                         ),
-                        child: Icon(typeIcon, size: 24, color: typeColor),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '${trip.origin} to ${trip.destination}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                        const SizedBox(width: 12),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                '${trip.origin} to ${trip.destination}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Trip #${trip.tripNumber} • ${trip.mode}',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.grey[600],
+                                ),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ],
                           ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Trip #${trip.tripNumber} • ${trip.mode}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
-                            ),
-                          ),
-                        ],
-                      ),
-                    ],
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
@@ -545,13 +567,18 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
-  void _createNewTrip() async {
-    // Create and initialize MapsNavigationCubit
+  void _createNewTrip() {
+    // Prevent multiple taps
+    if (_isCreatingTrip) return;
+    
+    setState(() {
+      _isCreatingTrip = true;
+    });
+    
+    // Create cubit without initialization - it will initialize lazily when needed
     final mapsNavCubit = MapsNavigationCubit();
-    await mapsNavCubit.initialize();
     
-    if (!mounted) return;
-    
+    // Navigate immediately without waiting for initialization
     Navigator.push(
       context,
       MaterialPageRoute(
@@ -566,6 +593,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     ).then((_) {
       mapsNavCubit.close();
       _loadTrips();
+      if (mounted) {
+        setState(() {
+          _isCreatingTrip = false;
+        });
+      }
     });
   }
 
@@ -656,13 +688,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
-  void _editTrip(TripModel trip) async {
-    // Create and initialize MapsNavigationCubit
+  void _editTrip(TripModel trip) {
+    // Create cubit without initialization - it will initialize lazily when needed
     final mapsNavCubit = MapsNavigationCubit();
-    await mapsNavCubit.initialize();
     
-    if (!mounted) return;
-    
+    // Navigate immediately without waiting for initialization
     Navigator.push(
       context,
       MaterialPageRoute(

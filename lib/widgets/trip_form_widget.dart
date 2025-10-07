@@ -93,49 +93,62 @@ class _TripFormWidgetState extends State<TripFormWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        title: Text(
-          widget.isEditing ? 'Edit Trip' : 'Create New Trip',
-          style: const TextStyle(
-            color: AppColors.appBarText,
-            fontWeight: FontWeight.bold,
+    return GestureDetector(
+      onTap: () {
+        // Dismiss keyboard and clear search results when tapping outside
+        FocusScope.of(context).unfocus();
+        if (_originSearchResults.isNotEmpty || _destinationSearchResults.isNotEmpty) {
+          setState(() {
+            _originSearchResults = [];
+            _destinationSearchResults = [];
+          });
+        }
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          title: Text(
+            widget.isEditing ? 'Edit Trip' : 'Create New Trip',
+            style: const TextStyle(
+              color: AppColors.appBarText,
+              fontWeight: FontWeight.bold,
+            ),
           ),
+          backgroundColor: AppColors.appBarBackground,
+          elevation: 0,
+          iconTheme: const IconThemeData(color: AppColors.appBarText),
         ),
-        backgroundColor: AppColors.appBarBackground,
-        elevation: 0,
-        iconTheme: const IconThemeData(color: AppColors.appBarText),
-      ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
-        child: Form(
-          key: _formKey,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildTripNumberField(),
-              const SizedBox(height: 16),
-              _buildOriginField(),
-              const SizedBox(height: 16),
-              _buildDestinationField(),
-              const SizedBox(height: 16),
-              _buildTimeField(),
-              const SizedBox(height: 16),
-              if (_selectedTripType == TripType.past) ...[
-                _buildEndTimeField(),
+        body: SingleChildScrollView(
+          padding: const EdgeInsets.all(16.0),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _buildTripNumberField(),
                 const SizedBox(height: 16),
+                _buildOriginField(),
+                const SizedBox(height: 16),
+                _buildDestinationField(),
+                const SizedBox(height: 16),
+                _buildTimeField(),
+                const SizedBox(height: 16),
+                if (_selectedTripType == TripType.past) ...[
+                  _buildEndTimeField(),
+                  const SizedBox(height: 16),
+                ],
+                _buildModeField(),
+                const SizedBox(height: 13),
+                _buildTripTypeField(),
+                const SizedBox(height: 13),
+                _buildActivitiesSection(),
+                const SizedBox(height: 10),
+                _buildTravellersSection(),
+                const SizedBox(height: 8),
+                _buildSubmitButton(),
+                const SizedBox(height: 16), // Bottom padding for better scrolling
               ],
-              _buildModeField(),
-              const SizedBox(height: 16),
-              _buildTripTypeField(),
-              const SizedBox(height: 16),
-              _buildActivitiesSection(),
-              const SizedBox(height: 16),
-              _buildTravellersSection(),
-              const SizedBox(height: 32),
-              _buildSubmitButton(),
-            ],
+            ),
           ),
         ),
       ),
@@ -182,10 +195,25 @@ class _TripFormWidgetState extends State<TripFormWidget> {
             labelText: 'Origin',
             hintText: 'Enter origin location',
             prefixIcon: const Icon(Icons.location_on, color: AppColors.iconPrimary),
-            suffixIcon: IconButton(
-              icon: const Icon(Icons.my_location, color: AppColors.iconPrimary),
-              onPressed: _useCurrentLocationAsOrigin,
-              tooltip: 'Use current location',
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (_originSearchResults.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.clear, color: AppColors.iconPrimary),
+                    onPressed: () {
+                      setState(() {
+                        _originSearchResults = [];
+                      });
+                    },
+                    tooltip: 'Clear search',
+                  ),
+                IconButton(
+                  icon: const Icon(Icons.my_location, color: AppColors.iconPrimary),
+                  onPressed: _useCurrentLocationAsOrigin,
+                  tooltip: 'Use current location',
+                ),
+              ],
             ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
@@ -199,6 +227,14 @@ class _TripFormWidgetState extends State<TripFormWidget> {
             fillColor: AppColors.inputBackground,
           ),
           onChanged: _searchOrigin,
+          onTap: () {
+            // Clear destination results when tapping origin field
+            if (_destinationSearchResults.isNotEmpty) {
+              setState(() {
+                _destinationSearchResults = [];
+              });
+            }
+          },
           validator: (value) {
             if (value == null || value.isEmpty) {
               return 'Please enter origin location';
@@ -226,19 +262,26 @@ class _TripFormWidgetState extends State<TripFormWidget> {
                 ),
               ],
             ),
-            child: Scrollbar(
+            child: Material(
+              color: Colors.transparent,
               child: ListView.separated(
                 shrinkWrap: true,
+                physics: const ClampingScrollPhysics(),
                 itemCount: _originSearchResults.length > 5 ? 5 : _originSearchResults.length,
                 separatorBuilder: (context, index) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final place = _originSearchResults[index];
                   return ListTile(
-                    title: Text(place.name),
+                    dense: true,
+                    title: Text(
+                      place.name,
+                      style: const TextStyle(fontSize: 14),
+                    ),
                     subtitle: Text(
                       place.address,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
                     ),
                     onTap: () => _selectOrigin(place),
                   );
@@ -260,6 +303,17 @@ class _TripFormWidgetState extends State<TripFormWidget> {
             labelText: 'Destination',
             hintText: 'Enter destination location',
             prefixIcon: const Icon(Icons.place, color: AppColors.iconPrimary),
+            suffixIcon: _destinationSearchResults.isNotEmpty
+                ? IconButton(
+                    icon: const Icon(Icons.clear, color: AppColors.iconPrimary),
+                    onPressed: () {
+                      setState(() {
+                        _destinationSearchResults = [];
+                      });
+                    },
+                    tooltip: 'Clear search',
+                  )
+                : null,
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: AppColors.inputBorder),
@@ -272,6 +326,14 @@ class _TripFormWidgetState extends State<TripFormWidget> {
             fillColor: AppColors.inputBackground,
           ),
           onChanged: _searchDestination,
+          onTap: () {
+            // Clear origin results when tapping destination field
+            if (_originSearchResults.isNotEmpty) {
+              setState(() {
+                _originSearchResults = [];
+              });
+            }
+          },
           validator: (value) {
             if (value == null || value.isEmpty) {
               return 'Please enter destination location';
@@ -299,19 +361,26 @@ class _TripFormWidgetState extends State<TripFormWidget> {
                 ),
               ],
             ),
-            child: Scrollbar(
+            child: Material(
+              color: Colors.transparent,
               child: ListView.separated(
                 shrinkWrap: true,
+                physics: const ClampingScrollPhysics(),
                 itemCount: _destinationSearchResults.length > 5 ? 5 : _destinationSearchResults.length,
                 separatorBuilder: (context, index) => const Divider(height: 1),
                 itemBuilder: (context, index) {
                   final place = _destinationSearchResults[index];
                   return ListTile(
-                    title: Text(place.name),
+                    dense: true,
+                    title: Text(
+                      place.name,
+                      style: const TextStyle(fontSize: 14),
+                    ),
                     subtitle: Text(
                       place.address,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontSize: 12),
                     ),
                     onTap: () => _selectDestination(place),
                   );
@@ -904,6 +973,9 @@ class _TripFormWidgetState extends State<TripFormWidget> {
 
   // Select origin from search results
   void _selectOrigin(PlaceModel place) {
+    // Unfocus the text field to dismiss keyboard
+    FocusScope.of(context).unfocus();
+    
     setState(() {
       _selectedOrigin = place;
       _originController.text = place.name;
@@ -913,6 +985,9 @@ class _TripFormWidgetState extends State<TripFormWidget> {
 
   // Select destination from search results
   void _selectDestination(PlaceModel place) {
+    // Unfocus the text field to dismiss keyboard
+    FocusScope.of(context).unfocus();
+    
     setState(() {
       _selectedDestination = place;
       _destinationController.text = place.name;
@@ -927,6 +1002,15 @@ class _TripFormWidgetState extends State<TripFormWidget> {
     });
 
     try {
+      // Check location permission first
+      final permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        final requested = await Geolocator.requestPermission();
+        if (requested == LocationPermission.denied || requested == LocationPermission.deniedForever) {
+          throw Exception('Location permission denied');
+        }
+      }
+
       // Get current position
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,

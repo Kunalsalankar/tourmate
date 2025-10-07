@@ -135,13 +135,24 @@ class _NavigationScreenState extends State<NavigationScreen> {
   @override
   Widget build(BuildContext context) {
     print('[DEBUG] NavigationScreen build');
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Navigation'),
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-      ),
-      body: BlocConsumer<MapsNavigationCubit, MapsNavigationState>(
+    return GestureDetector(
+      onTap: () {
+        // Dismiss keyboard and clear search results when tapping outside
+        FocusScope.of(context).unfocus();
+        if (_originSearchResults.isNotEmpty || _destinationSearchResults.isNotEmpty) {
+          setState(() {
+            _originSearchResults = [];
+            _destinationSearchResults = [];
+          });
+        }
+      },
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text('Navigation'),
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+        ),
+        body: BlocConsumer<MapsNavigationCubit, MapsNavigationState>(
         listener: (context, state) {
           print('[DEBUG] BlocConsumer listener: $state');
           if (state is MapsNavigationError) {
@@ -216,11 +227,12 @@ class _NavigationScreenState extends State<NavigationScreen> {
           );
         },
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _getCurrentLocation,
-        backgroundColor: AppColors.primary,
-        foregroundColor: Colors.white,
-        child: const Icon(Icons.my_location),
+        floatingActionButton: FloatingActionButton(
+          onPressed: _getCurrentLocation,
+          backgroundColor: AppColors.primary,
+          foregroundColor: Colors.white,
+          child: const Icon(Icons.my_location),
+        ),
       ),
     );
   }
@@ -228,74 +240,82 @@ class _NavigationScreenState extends State<NavigationScreen> {
   // Build search section for origin and destination
   Widget _buildSearchSection() {
     return Container(
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.4, // Limit to 40% of screen
+      ),
       padding: const EdgeInsets.all(16),
       color: Colors.white,
-      child: Column(
-        children: [
-          // Origin search
-          _buildSearchField(
-            controller: _originController,
-            hint: 'Enter origin',
-            onChanged: _searchOrigin,
-            results: _originSearchResults,
-            onResultTap: (place) {
-              setState(() {
-                _selectedOrigin = place;
-                _originController.text = place.name;
-                _originSearchResults = [];
-              });
-              _addMarker(
-                place.location,
-                place.name,
-                BitmapDescriptor.defaultMarkerWithHue(
-                  BitmapDescriptor.hueGreen,
-                ),
-              );
-              _moveCamera(place.location);
-            },
-          ),
-
-          const SizedBox(height: 8),
-
-          // Destination search
-          _buildSearchField(
-            controller: _destinationController,
-            hint: 'Enter destination',
-            onChanged: _searchDestination,
-            results: _destinationSearchResults,
-            onResultTap: (place) {
-              setState(() {
-                _selectedDestination = place;
-                _destinationController.text = place.name;
-                _destinationSearchResults = [];
-              });
-              _addMarker(
-                place.location,
-                place.name,
-                BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-              );
-              _moveCamera(place.location);
-            },
-          ),
-
-          const SizedBox(height: 16),
-
-          // Get directions button
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton(
-              onPressed: _selectedOrigin != null && _selectedDestination != null
-                  ? _getDirections
-                  : null,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.white,
-                padding: const EdgeInsets.symmetric(vertical: 12),
-              ),
-              child: const Text('Get Directions'),
+      child: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Origin search
+            _buildSearchField(
+              controller: _originController,
+              hint: 'Enter origin',
+              onChanged: _searchOrigin,
+              results: _originSearchResults,
+              onResultTap: (place) {
+                FocusScope.of(context).unfocus(); // Dismiss keyboard
+                setState(() {
+                  _selectedOrigin = place;
+                  _originController.text = place.name;
+                  _originSearchResults = [];
+                });
+                _addMarker(
+                  place.location,
+                  place.name,
+                  BitmapDescriptor.defaultMarkerWithHue(
+                    BitmapDescriptor.hueGreen,
+                  ),
+                );
+                _moveCamera(place.location);
+              },
             ),
-          ),
-        ],
+
+            const SizedBox(height: 8),
+
+            // Destination search
+            _buildSearchField(
+              controller: _destinationController,
+              hint: 'Enter destination',
+              onChanged: _searchDestination,
+              results: _destinationSearchResults,
+              onResultTap: (place) {
+                FocusScope.of(context).unfocus(); // Dismiss keyboard
+                setState(() {
+                  _selectedDestination = place;
+                  _destinationController.text = place.name;
+                  _destinationSearchResults = [];
+                });
+                _addMarker(
+                  place.location,
+                  place.name,
+                  BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                );
+                _moveCamera(place.location);
+              },
+            ),
+
+            const SizedBox(height: 16),
+
+            // Get directions button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton(
+                onPressed: _selectedOrigin != null && _selectedDestination != null
+                    ? _getDirections
+                    : null,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                ),
+                child: const Text('Get Directions'),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -338,6 +358,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
         if (results.isNotEmpty)
           Container(
             margin: const EdgeInsets.only(top: 4),
+            constraints: const BoxConstraints(
+              maxHeight: 200, // Limit height to prevent overflow
+            ),
             decoration: BoxDecoration(
               color: Colors.white,
               border: Border.all(color: Colors.grey.shade300),
@@ -353,17 +376,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
             ),
             child: ListView.separated(
               shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
               itemCount: results.length > 5 ? 5 : results.length,
               separatorBuilder: (context, index) => const Divider(height: 1),
               itemBuilder: (context, index) {
                 final place = results[index];
                 return ListTile(
-                  title: Text(place.name),
+                  dense: true,
+                  title: Text(
+                    place.name,
+                    style: const TextStyle(fontSize: 14),
+                  ),
                   subtitle: Text(
                     place.address,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(fontSize: 12),
                   ),
                   onTap: () => onResultTap(place),
                 );
