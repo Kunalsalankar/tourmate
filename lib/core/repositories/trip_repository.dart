@@ -1,3 +1,5 @@
+// ignore_for_file: unnecessary_cast
+
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/trip_model.dart';
@@ -54,7 +56,7 @@ class TripRepository {
           .get();
 
       return querySnapshot.docs
-          .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+          .map((doc) => TripModel.fromMap(doc.data(), doc.id))
           .toList();
     } catch (e) {
       throw Exception('Failed to get user trips: $e');
@@ -188,7 +190,7 @@ class TripRepository {
           .get();
 
       return querySnapshot.docs
-          .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+          .map((doc) => TripModel.fromMap(doc.data(), doc.id))
           .toList();
     } catch (e) {
       throw Exception('Failed to get trips by date range: $e');
@@ -211,7 +213,7 @@ class TripRepository {
           .get();
 
       return querySnapshot.docs
-          .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+          .map((doc) => TripModel.fromMap(doc.data(), doc.id))
           .toList();
     } catch (e) {
       throw Exception('Failed to get trips by mode: $e');
@@ -232,7 +234,7 @@ class TripRepository {
           .get();
 
       final trips = querySnapshot.docs
-          .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+          .map((doc) => TripModel.fromMap(doc.data(), doc.id))
           .toList();
 
       // Calculate statistics

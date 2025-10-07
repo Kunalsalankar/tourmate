@@ -158,12 +158,24 @@ class MapsNavigationCubit extends Cubit<MapsNavigationState> {
 
       _routePoints = directions['polylineCoordinates'];
 
-      // Get nearby places along the route
-      _nearbyPlaces = await _mapsService.getNearbyPlaces(
-        _routePoints,
-        500, // 500 meters radius
-        ['tourist_attraction', 'museum', 'park', 'restaurant', 'cafe'],
-      );
+      // Skip nearby places for maximum performance
+      // This eliminates ZERO_RESULTS errors and speeds up route loading
+      // You can re-enable this later if needed
+      _nearbyPlaces = [];
+      
+      // OPTIONAL: Uncomment below to enable nearby places (slower)
+      // try {
+      //   if (_routePoints.length < 100) {
+      //     _nearbyPlaces = await _mapsService.getNearbyPlaces(
+      //       _routePoints,
+      //       500,
+      //       ['tourist_attraction'],
+      //     );
+      //   }
+      // } catch (e) {
+      //   print('Failed to get nearby places: $e');
+      //   _nearbyPlaces = [];
+      // }
 
       emit(RouteLoaded(
         origin: origin,

@@ -7,6 +7,7 @@ import 'package:flutter_polyline_points/flutter_polyline_points.dart';
 import 'package:google_maps_webservice/places.dart';
 import 'package:http/http.dart' as http;
 import '../models/place_model.dart';
+import 'cache_service.dart';
 
 /// A service that handles Google Maps API interactions
 class MapsService {
@@ -18,6 +19,8 @@ class MapsService {
   // API key from .env file
   String? _apiKey;
   
+  // Cache service
+  final CacheService _cacheService = CacheService();
 
   /// Initialize the maps service
   Future<void> initialize() async {
@@ -30,16 +33,32 @@ class MapsService {
     if (_apiKey?.isEmpty ?? true) {
       throw Exception('Google Maps API key not found in .env file');
     }
+    
+    // Initialize cache service
+    await _cacheService.initialize();
+    
+    // Clear expired caches on startup
+    await _cacheService.clearExpiredCaches();
   }
 
   /// Search for places using the Places API
   Future<List<PlaceModel>> searchPlaces(String query) async {
     try {
+      // Check cache first
+      final cachedPlaces = _cacheService.getCachedPlaces(query);
+      if (cachedPlaces != null) {
+        if (kDebugMode) {
+          print('Returning cached places for query: $query');
+        }
+        return cachedPlaces;
+      }
+
+      // If not in cache, fetch from API
       final places = GoogleMapsPlaces(apiKey: _apiKey);
       final response = await places.searchByText(query);
 
       if (response.status == 'OK') {
-        return response.results
+        final results = response.results
             .map((result) => PlaceModel(
                   placeId: result.placeId,
                   name: result.name,
@@ -50,6 +69,11 @@ class MapsService {
                   ),
                 ))
             .toList();
+        
+        // Cache the results
+        await _cacheService.cachePlaces(query, results);
+        
+        return results;
       } else {
         if (kDebugMode) {
           print('Places API error: ${response.errorMessage}');
@@ -70,6 +94,19 @@ class MapsService {
     LatLng destination,
   ) async {
     try {
+      // Generate cache key
+      final cacheKey = _cacheService.generateDirectionsKey(origin, destination);
+      
+      // Check cache first
+      final cachedDirections = _cacheService.getCachedDirections(cacheKey);
+      if (cachedDirections != null) {
+        if (kDebugMode) {
+          print('Returning cached directions for route: $cacheKey');
+        }
+        return cachedDirections;
+      }
+
+      // If not in cache, fetch from API
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/directions/json?'
         'origin=${origin.latitude},${origin.longitude}'
@@ -94,6 +131,14 @@ class MapsService {
         // Get distance and duration
         final distance = data['routes'][0]['legs'][0]['distance']['text'];
         final duration = data['routes'][0]['legs'][0]['duration']['text'];
+
+        // Cache the results
+        await _cacheService.cacheDirections(
+          cacheKey,
+          polylineCoordinates,
+          distance,
+          duration,
+        );
 
         return {
           'polylineCoordinates': polylineCoordinates,
@@ -120,13 +165,35 @@ class MapsService {
     double radius,
     List<String> types,
   ) async {
+    // Generate cache key
+    final cacheKey = _cacheService.generateNearbyPlacesKey(
+      routePoints,
+      radius,
+      types,
+    );
+    
+    // Check cache first
+    final cachedNearbyPlaces = _cacheService.getCachedNearbyPlaces(cacheKey);
+    if (cachedNearbyPlaces != null) {
+      if (kDebugMode) {
+        print('Returning cached nearby places for route');
+      }
+      return cachedNearbyPlaces;
+    }
+
     final places = <PlaceModel>{};
 
     // Sample points along the route to avoid too many API calls
-    final sampledPoints = _sampleRoutePoints(routePoints, 500); // Every 500 meters
+    // Increased to 2000 meters (2km) for better performance
+    final sampledPoints = _sampleRoutePoints(routePoints, 2000);
+
+    // Limit to maximum 5 API calls to avoid slow loading
+    final limitedPoints = sampledPoints.length > 5 
+        ? sampledPoints.sublist(0, 5) 
+        : sampledPoints;
 
     // Query nearby places for each sampled point
-    for (final point in sampledPoints) {
+    for (final point in limitedPoints) {
       try {
         final typeParam = types.isNotEmpty ? '&type=${types.join('|')}' : '';
         
@@ -169,11 +236,16 @@ class MapsService {
         }
       }
 
-      // Add a delay to avoid hitting API rate limits
-      await Future.delayed(const Duration(milliseconds: 200));
+      // Reduced delay for faster loading (only 50ms between calls)
+      await Future.delayed(const Duration(milliseconds: 50));
     }
 
-    return places.toList();
+    final placesList = places.toList();
+    
+    // Cache the results
+    await _cacheService.cacheNearbyPlaces(cacheKey, placesList);
+
+    return placesList;
   }
 
   /// Sample points along a route to reduce API calls

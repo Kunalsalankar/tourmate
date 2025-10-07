@@ -53,6 +53,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
   // Connectivity service
   final ConnectivityService _connectivityService = ConnectivityService();
   bool _isConnected = true;
+  
+  // Debounce timers for search
+  Timer? _originSearchDebounce;
+  Timer? _destinationSearchDebounce;
 
   @override
   void initState() {
@@ -96,6 +100,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
     _originController.dispose();
     _destinationController.dispose();
     _connectivityService.dispose();
+    _originSearchDebounce?.cancel();
+    _destinationSearchDebounce?.cancel();
     super.dispose();
   }
   
@@ -168,6 +174,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                       ),
                       onMapCreated: (GoogleMapController controller) {
                         _controller.complete(controller);
+                        // Set map style for better performance (optional)
+                        controller.setMapStyle(null);
                       },
                       markers: _markers,
                       polylines: _polylines,
@@ -176,9 +184,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
                       myLocationButtonEnabled: true,
                       compassEnabled: true,
                       zoomControlsEnabled: true,
+                      // Performance optimizations
+                      liteModeEnabled: false, // Keep full features
+                      tiltGesturesEnabled: false, // Disable tilt for better performance
+                      rotateGesturesEnabled: false, // Disable rotation for better performance
+                      buildingsEnabled: false, // Disable 3D buildings for faster rendering
+                      trafficEnabled: false, // Disable traffic layer
+                      indoorViewEnabled: false, // Disable indoor maps
+                      // Reduce map rendering updates
                       onCameraMove: (CameraPosition position) {
                         // Store the current camera position
                         _lastMapPosition = position;
+                      },
+                      // Only update when camera movement is idle
+                      onCameraIdle: () {
+                        // Camera movement finished, can trigger updates if needed
                       },
                     ),
 
@@ -364,68 +384,74 @@ class _NavigationScreenState extends State<NavigationScreen> {
       return;
     }
     
-    // Check connectivity before making network request
-    if (!_isConnected) {
-      _showConnectivityWarning();
-      return;
-    }
-
-    setState(() {
-      _isSearching = true;
-      _originSearchResults = []; // Clear previous results
-    });
-
-    try {
-      final results = await context.read<MapsNavigationCubit>().searchPlaces(
-        query,
-      );
-
-      if (!mounted) return;
+    // Cancel previous debounce timer
+    _originSearchDebounce?.cancel();
+    
+    // Debounce the search to reduce API calls
+    _originSearchDebounce = Timer(const Duration(milliseconds: 500), () async {
+      // Check connectivity before making network request
+      if (!_isConnected) {
+        _showConnectivityWarning();
+        return;
+      }
 
       setState(() {
-        _originSearchResults = results;
-        _isSearching = false;
-        
-        // If we have exactly one result, auto-select it
-        if (results.length == 1) {
-          _selectedOrigin = results.first;
-          _originController.text = results.first.name;
-          _originSearchResults = []; // Clear search results after selection
+        _isSearching = true;
+        _originSearchResults = []; // Clear previous results
+      });
+
+      try {
+        final results = await context.read<MapsNavigationCubit>().searchPlaces(
+          query,
+        );
+
+        if (!mounted) return;
+
+        setState(() {
+          _originSearchResults = results;
+          _isSearching = false;
           
-          // Add marker for the selected origin
-          _addMarker(
-            results.first.location,
-            results.first.name,
-            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-          );
-          _moveCamera(results.first.location);
+          // If we have exactly one result, auto-select it
+          if (results.length == 1) {
+            _selectedOrigin = results.first;
+            _originController.text = results.first.name;
+            _originSearchResults = []; // Clear search results after selection
+            
+            // Add marker for the selected origin
+            _addMarker(
+              results.first.location,
+              results.first.name,
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+            );
+            _moveCamera(results.first.location);
+            
+            // Force UI update to enable Get Directions button if destination is also selected
+            if (_selectedDestination != null) {
+              print('[DEBUG] Both origin and destination selected, enabling Get Directions button');
+              setState(() {}); // Explicitly trigger rebuild to update button state
+            }
+          }
+        });
+        print('[DEBUG] _searchOrigin results: ${results.length}');
+      } catch (e) {
+        print('[DEBUG] Error searching for origin: $e');
+        if (mounted) {
+          setState(() {
+            _isSearching = false;
+            _originSearchResults = []; // Clear results on error
+          });
           
-          // Force UI update to enable Get Directions button if destination is also selected
-          if (_selectedDestination != null) {
-            print('[DEBUG] Both origin and destination selected, enabling Get Directions button');
-            setState(() {}); // Explicitly trigger rebuild to update button state
+          // Check if error is related to network connectivity
+          if (!_isConnected) {
+            _showConnectivityWarning();
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(content: Text('Error searching for places: $e')),
+            );
           }
         }
-      });
-      print('[DEBUG] _searchOrigin results: ${results.length}');
-    } catch (e) {
-      print('[DEBUG] Error searching for origin: $e');
-      if (mounted) {
-        setState(() {
-          _isSearching = false;
-          _originSearchResults = []; // Clear results on error
-        });
-        
-        // Check if error is related to network connectivity
-        if (!_isConnected) {
-          _showConnectivityWarning();
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Error searching for places: $e')),
-          );
-        }
       }
-    }
+    });
   }
 
   // Search for destination places
@@ -438,54 +464,60 @@ class _NavigationScreenState extends State<NavigationScreen> {
       return;
     }
 
-    setState(() {
-      _isSearching = true;
-    });
-
-    try {
-      final results = await context.read<MapsNavigationCubit>().searchPlaces(
-        query,
-      );
-
-      if (!mounted) return;
-
+    // Cancel previous debounce timer
+    _destinationSearchDebounce?.cancel();
+    
+    // Debounce the search to reduce API calls
+    _destinationSearchDebounce = Timer(const Duration(milliseconds: 500), () async {
       setState(() {
-        _destinationSearchResults = results;
-        _isSearching = false;
-        // If we have exactly one result, auto-select it
-        if (results.length == 1) {
-          _selectedDestination = results.first;
-          _destinationController.text = results.first.name;
-          _destinationSearchResults = []; // Clear search results after selection
-          
-          // Add marker for the selected destination
-          _addMarker(
-            results.first.location,
-            results.first.name,
-            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-          );
-          _moveCamera(results.first.location);
-          
-          // Force UI update to enable Get Directions button if origin is also selected
-          if (_selectedOrigin != null) {
-            print('[DEBUG] Both origin and destination selected, enabling Get Directions button');
-            setState(() {}); // Explicitly trigger rebuild to update button state
-          }
-        }
+        _isSearching = true;
       });
-      print('[DEBUG] _searchDestination results: ${results.length}');
-    } catch (e) {
-      print('[DEBUG] Error searching for destination: $e');
-      if (mounted) {
-        setState(() {
-          _isSearching = false;
-          _destinationSearchResults = []; // Clear results on error
-        });
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error searching for places: $e')),
+
+      try {
+        final results = await context.read<MapsNavigationCubit>().searchPlaces(
+          query,
         );
+
+        if (!mounted) return;
+
+        setState(() {
+          _destinationSearchResults = results;
+          _isSearching = false;
+          // If we have exactly one result, auto-select it
+          if (results.length == 1) {
+            _selectedDestination = results.first;
+            _destinationController.text = results.first.name;
+            _destinationSearchResults = []; // Clear search results after selection
+            
+            // Add marker for the selected destination
+            _addMarker(
+              results.first.location,
+              results.first.name,
+              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+            );
+            _moveCamera(results.first.location);
+            
+            // Force UI update to enable Get Directions button if origin is also selected
+            if (_selectedOrigin != null) {
+              print('[DEBUG] Both origin and destination selected, enabling Get Directions button');
+              setState(() {}); // Explicitly trigger rebuild to update button state
+            }
+          }
+        });
+        print('[DEBUG] _searchDestination results: ${results.length}');
+      } catch (e) {
+        print('[DEBUG] Error searching for destination: $e');
+        if (mounted) {
+          setState(() {
+            _isSearching = false;
+            _destinationSearchResults = []; // Clear results on error
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error searching for places: $e')),
+          );
+        }
       }
-    }
+    });
   }
 
   // Get directions between origin and destination
@@ -525,25 +557,20 @@ class _NavigationScreenState extends State<NavigationScreen> {
         BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
       );
 
-      // Add nearby place markers
-      for (final place in state.nearbyPlaces) {
+      // Add nearby place markers (limit to 10 for performance)
+      final limitedPlaces = state.nearbyPlaces.length > 10 
+          ? state.nearbyPlaces.sublist(0, 10) 
+          : state.nearbyPlaces;
+          
+      for (final place in limitedPlaces) {
         _addMarker(
           place.location,
           place.name,
           BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueViolet),
         );
 
-        // Add circle around nearby place
-        _circles.add(
-          Circle(
-            circleId: CircleId('circle_${place.placeId}'),
-            center: place.location,
-            radius: 100, // 100 meters
-            fillColor: AppColors.primary.withAlpha(51), // 0.2 * 255 = 51
-            strokeColor: AppColors.primary,
-            strokeWidth: 1,
-          ),
-        );
+        // Skip circles for better performance
+        // Circles can slow down map rendering significantly
       }
 
       // Add polyline for the route

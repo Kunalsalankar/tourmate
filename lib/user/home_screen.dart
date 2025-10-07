@@ -1,3 +1,5 @@
+// ignore_for_file: unused_element
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -431,32 +433,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.explore_outlined, size: 0, color: AppColors.textLight),
-          const SizedBox(height: 16),
-          Text(
-            'No trips yet',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Start your journey by creating your first trip!',
-            style: TextStyle(fontSize: 12, color: AppColors.textSecondary),
-            textAlign: TextAlign.center,
-          ),
-         
-        ],
-      ),
-    );
-  }
 
   Widget _buildTripCard(TripModel trip) {
     // Determine trip type for styling
