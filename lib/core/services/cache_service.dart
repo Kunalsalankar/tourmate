@@ -35,23 +35,32 @@ class CacheService {
 
   /// Cache place search results
   Future<void> cachePlaces(String query, List<PlaceModel> places) async {
-    final box = Hive.box(_placesBoxName);
-    final cachedData = {
-      'query': query,
-      'places': places.map((p) => p.toMap()).toList(),
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    };
-    await box.put(query.toLowerCase(), cachedData);
+    try {
+      if (!_isInitialized || !Hive.isBoxOpen(_placesBoxName)) return;
+      
+      final box = Hive.box(_placesBoxName);
+      final cachedData = {
+        'query': query,
+        'places': places.map((p) => p.toMap()).toList(),
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      };
+      await box.put(query.toLowerCase(), cachedData);
+    } catch (e) {
+      // Silently fail if caching doesn't work
+      return;
+    }
   }
 
   /// Get cached place search results
   List<PlaceModel>? getCachedPlaces(String query) {
-    final box = Hive.box(_placesBoxName);
-    final cachedData = box.get(query.toLowerCase());
-
-    if (cachedData == null) return null;
-
     try {
+      if (!_isInitialized || !Hive.isBoxOpen(_placesBoxName)) return null;
+      
+      final box = Hive.box(_placesBoxName);
+      final cachedData = box.get(query.toLowerCase());
+
+      if (cachedData == null) return null;
+
       // Check if cache is expired
       final timestamp = DateTime.fromMillisecondsSinceEpoch(cachedData['timestamp'] as int);
       if (DateTime.now().difference(timestamp) > _cacheExpiration) {
@@ -62,8 +71,7 @@ class CacheService {
       final placesData = cachedData['places'] as List;
       return placesData.map((p) => PlaceModel.fromMap(p as Map<String, dynamic>)).toList();
     } catch (e) {
-      // If there's any error parsing cached data, delete it and return null
-      box.delete(query.toLowerCase());
+      // If there's any error, return null (cache miss)
       return null;
     }
   }
@@ -75,24 +83,32 @@ class CacheService {
     String distance,
     String duration,
   ) async {
-    final box = Hive.box(_directionsBoxName);
-    final cachedData = {
-      'polylineCoordinates': polylineCoordinates.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList(),
-      'distance': distance,
-      'duration': duration,
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    };
-    await box.put(key, cachedData);
+    try {
+      if (!_isInitialized || !Hive.isBoxOpen(_directionsBoxName)) return;
+      
+      final box = Hive.box(_directionsBoxName);
+      final cachedData = {
+        'polylineCoordinates': polylineCoordinates.map((p) => {'lat': p.latitude, 'lng': p.longitude}).toList(),
+        'distance': distance,
+        'duration': duration,
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      };
+      await box.put(key, cachedData);
+    } catch (e) {
+      return;
+    }
   }
 
   /// Get cached directions
   Map<String, dynamic>? getCachedDirections(String key) {
-    final box = Hive.box(_directionsBoxName);
-    final cachedData = box.get(key);
-
-    if (cachedData == null) return null;
-
     try {
+      if (!_isInitialized || !Hive.isBoxOpen(_directionsBoxName)) return null;
+      
+      final box = Hive.box(_directionsBoxName);
+      final cachedData = box.get(key);
+
+      if (cachedData == null) return null;
+
       // Check if cache is expired
       final timestamp = DateTime.fromMillisecondsSinceEpoch(cachedData['timestamp'] as int);
       if (DateTime.now().difference(timestamp) > _cacheExpiration) {
@@ -109,29 +125,36 @@ class CacheService {
         'duration': cachedData['duration'] as String,
       };
     } catch (e) {
-      box.delete(key);
       return null;
     }
   }
 
   /// Cache nearby places
   Future<void> cacheNearbyPlaces(String key, List<PlaceModel> places) async {
-    final box = Hive.box(_nearbyPlacesBoxName);
-    final cachedData = {
-      'places': places.map((p) => p.toMap()).toList(),
-      'timestamp': DateTime.now().millisecondsSinceEpoch,
-    };
-    await box.put(key, cachedData);
+    try {
+      if (!_isInitialized || !Hive.isBoxOpen(_nearbyPlacesBoxName)) return;
+      
+      final box = Hive.box(_nearbyPlacesBoxName);
+      final cachedData = {
+        'places': places.map((p) => p.toMap()).toList(),
+        'timestamp': DateTime.now().millisecondsSinceEpoch,
+      };
+      await box.put(key, cachedData);
+    } catch (e) {
+      return;
+    }
   }
 
   /// Get cached nearby places
   List<PlaceModel>? getCachedNearbyPlaces(String key) {
-    final box = Hive.box(_nearbyPlacesBoxName);
-    final cachedData = box.get(key);
-
-    if (cachedData == null) return null;
-
     try {
+      if (!_isInitialized || !Hive.isBoxOpen(_nearbyPlacesBoxName)) return null;
+      
+      final box = Hive.box(_nearbyPlacesBoxName);
+      final cachedData = box.get(key);
+
+      if (cachedData == null) return null;
+
       // Check if cache is expired
       final timestamp = DateTime.fromMillisecondsSinceEpoch(cachedData['timestamp'] as int);
       if (DateTime.now().difference(timestamp) > _cacheExpiration) {
@@ -142,7 +165,6 @@ class CacheService {
       final placesData = cachedData['places'] as List;
       return placesData.map((p) => PlaceModel.fromMap(p as Map<String, dynamic>)).toList();
     } catch (e) {
-      box.delete(key);
       return null;
     }
   }

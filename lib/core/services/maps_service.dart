@@ -4,7 +4,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
-import 'package:google_maps_webservice/places.dart';
+import 'package:google_maps_webservice/places.dart' as places_webservice;
 import 'package:http/http.dart' as http;
 import '../models/place_model.dart';
 import 'cache_service.dart';
@@ -41,7 +41,7 @@ class MapsService {
     await _cacheService.clearExpiredCaches();
   }
 
-  /// Search for places using the Places API
+  /// Search for places using the Places API (for non-autocomplete searches)
   Future<List<PlaceModel>> searchPlaces(String query) async {
     try {
       // Check cache first
@@ -54,7 +54,7 @@ class MapsService {
       }
 
       // If not in cache, fetch from API
-      final places = GoogleMapsPlaces(apiKey: _apiKey);
+      final places = places_webservice.GoogleMapsPlaces(apiKey: _apiKey);
       final response = await places.searchByText(query);
 
       if (response.status == 'OK') {
@@ -86,6 +86,93 @@ class MapsService {
       }
       return [];
     }
+  }
+
+  /// Search for places with autocomplete functionality
+  Future<List<PlaceModel>> searchPlacesAutocomplete(String query) async {
+    try {
+      // Check cache first
+      final cacheKey = 'autocomplete_$query';
+      final cachedPlaces = _cacheService.getCachedPlaces(cacheKey);
+      if (cachedPlaces != null) {
+        if (kDebugMode) {
+          print('Returning cached autocomplete places for query: $query');
+        }
+        return cachedPlaces;
+      }
+
+      // Use Google Places Autocomplete API for better results
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/place/autocomplete/json?'
+        'input=$query'
+        '&key=$_apiKey',
+      );
+
+      final response = await http.get(url);
+      final data = json.decode(response.body);
+
+      if (data['status'] == 'OK') {
+        final predictions = data['predictions'] as List;
+        final results = <PlaceModel>[];
+
+        for (final prediction in predictions) {
+          // Get place details for each prediction to get coordinates
+          final placeDetails = await _getPlaceDetails(prediction['place_id'] as String);
+          if (placeDetails != null) {
+            results.add(placeDetails);
+          }
+        }
+
+        // Cache the results
+        await _cacheService.cachePlaces(cacheKey, results);
+
+        return results;
+      } else {
+        if (kDebugMode) {
+          print('Places Autocomplete API error: ${data['status']}');
+        }
+        // Fallback to regular search if autocomplete fails
+        return await searchPlaces(query);
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error in autocomplete search: $e');
+      }
+      // Fallback to regular search
+      return await searchPlaces(query);
+    }
+  }
+
+  /// Get detailed information about a place by its place ID
+  Future<PlaceModel?> _getPlaceDetails(String placeId) async {
+    try {
+      final url = Uri.parse(
+        'https://maps.googleapis.com/maps/api/place/details/json?'
+        'place_id=$placeId'
+        '&fields=place_id,name,formatted_address,geometry'
+        '&key=$_apiKey',
+      );
+
+      final response = await http.get(url);
+      final data = json.decode(response.body);
+
+      if (data['status'] == 'OK') {
+        final result = data['result'];
+        final location = result['geometry']['location'];
+
+        return PlaceModel(
+          placeId: result['place_id'],
+          name: result['name'],
+          address: result['formatted_address'] ?? '',
+          location: LatLng(location['lat'], location['lng']),
+        );
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('Error getting place details: $e');
+      }
+    }
+    return null;
   }
 
   /// Get route between origin and destination

@@ -1,8 +1,13 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../../core/colors.dart';
 import '../../core/models/trip_model.dart';
+import '../../core/models/place_model.dart';
 import '../../cubit/trip_cubit.dart';
+import '../../cubit/maps_navigation_cubit.dart';
 
 /// Widget for creating and editing trips
 /// This form captures all required trip information including
@@ -30,6 +35,15 @@ class _TripFormWidgetState extends State<TripFormWidget> {
   TripType _selectedTripType = TripType.active;
   List<String> _activities = [];
   List<TravellerInfo> _accompanyingTravellers = [];
+
+  // Autocomplete state
+  List<PlaceModel> _originSearchResults = [];
+  List<PlaceModel> _destinationSearchResults = [];
+  PlaceModel? _selectedOrigin;
+  PlaceModel? _selectedDestination;
+  bool _isSearching = false;
+  Timer? _originSearchDebounce;
+  Timer? _destinationSearchDebounce;
 
   final List<String> _transportModes = [
     'Car',
@@ -72,6 +86,8 @@ class _TripFormWidgetState extends State<TripFormWidget> {
     _destinationController.dispose();
     _modeController.dispose();
     _activityController.dispose();
+    _originSearchDebounce?.cancel();
+    _destinationSearchDebounce?.cancel();
     super.dispose();
   }
 
@@ -157,56 +173,153 @@ class _TripFormWidgetState extends State<TripFormWidget> {
   }
 
   Widget _buildOriginField() {
-    return TextFormField(
-      controller: _originController,
-      decoration: InputDecoration(
-        labelText: 'Origin',
-        hintText: 'Enter origin location',
-        prefixIcon: const Icon(Icons.location_on, color: AppColors.iconPrimary),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.inputBorder),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: _originController,
+          decoration: InputDecoration(
+            labelText: 'Origin',
+            hintText: 'Enter origin location',
+            prefixIcon: const Icon(Icons.location_on, color: AppColors.iconPrimary),
+            suffixIcon: IconButton(
+              icon: const Icon(Icons.my_location, color: AppColors.iconPrimary),
+              onPressed: _useCurrentLocationAsOrigin,
+              tooltip: 'Use current location',
+            ),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.inputBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.inputBorderFocused),
+            ),
+            filled: true,
+            fillColor: AppColors.inputBackground,
+          ),
+          onChanged: _searchOrigin,
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please enter origin location';
+            }
+            return null;
+          },
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.inputBorderFocused),
-        ),
-        filled: true,
-        fillColor: AppColors.inputBackground,
-      ),
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Please enter origin location';
-        }
-        return null;
-      },
+        // Search results
+        if (_originSearchResults.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            constraints: const BoxConstraints(
+              maxHeight: 200, // Limit height to prevent overflow
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withAlpha(76),
+                  spreadRadius: 1,
+                  blurRadius: 3,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Scrollbar(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: _originSearchResults.length > 5 ? 5 : _originSearchResults.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final place = _originSearchResults[index];
+                  return ListTile(
+                    title: Text(place.name),
+                    subtitle: Text(
+                      place.address,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => _selectOrigin(place),
+                  );
+                },
+              ),
+            ),
+          ),
+      ],
     );
   }
 
   Widget _buildDestinationField() {
-    return TextFormField(
-      controller: _destinationController,
-      decoration: InputDecoration(
-        labelText: 'Destination',
-        hintText: 'Enter destination location',
-        prefixIcon: const Icon(Icons.place, color: AppColors.iconPrimary),
-        border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.inputBorder),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: _destinationController,
+          decoration: InputDecoration(
+            labelText: 'Destination',
+            hintText: 'Enter destination location',
+            prefixIcon: const Icon(Icons.place, color: AppColors.iconPrimary),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.inputBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.inputBorderFocused),
+            ),
+            filled: true,
+            fillColor: AppColors.inputBackground,
+          ),
+          onChanged: _searchDestination,
+          validator: (value) {
+            if (value == null || value.isEmpty) {
+              return 'Please enter destination location';
+            }
+            return null;
+          },
         ),
-        focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
-          borderSide: const BorderSide(color: AppColors.inputBorderFocused),
-        ),
-        filled: true,
-        fillColor: AppColors.inputBackground,
-      ),
-      validator: (value) {
-        if (value == null || value.isEmpty) {
-          return 'Please enter destination location';
-        }
-        return null;
-      },
+        // Search results
+        if (_destinationSearchResults.isNotEmpty)
+          Container(
+            margin: const EdgeInsets.only(top: 4),
+            constraints: const BoxConstraints(
+              maxHeight: 200, // Limit height to prevent overflow
+            ),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.grey.withAlpha(76),
+                  spreadRadius: 1,
+                  blurRadius: 3,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Scrollbar(
+              child: ListView.separated(
+                shrinkWrap: true,
+                itemCount: _destinationSearchResults.length > 5 ? 5 : _destinationSearchResults.length,
+                separatorBuilder: (context, index) => const Divider(height: 1),
+                itemBuilder: (context, index) {
+                  final place = _destinationSearchResults[index];
+                  return ListTile(
+                    title: Text(place.name),
+                    subtitle: Text(
+                      place.address,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    onTap: () => _selectDestination(place),
+                  );
+                },
+              ),
+            ),
+          ),
+      ],
     );
   }
 
@@ -703,6 +816,171 @@ class _TripFormWidgetState extends State<TripFormWidget> {
 
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  // Search for origin places with autocomplete
+  Future<void> _searchOrigin(String query) async {
+    if (query.length < 3) {
+      setState(() {
+        _originSearchResults = [];
+      });
+      return;
+    }
+
+    // Cancel previous debounce timer
+    _originSearchDebounce?.cancel();
+
+    // Debounce the search to reduce API calls
+    _originSearchDebounce = Timer(const Duration(milliseconds: 500), () async {
+      setState(() {
+        _isSearching = true;
+        _originSearchResults = [];
+      });
+
+      try {
+        final results = await context.read<MapsNavigationCubit>().searchPlaces(query);
+
+        if (!mounted) return;
+
+        setState(() {
+          _originSearchResults = results;
+          _isSearching = false;
+        });
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isSearching = false;
+            _originSearchResults = [];
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error searching for places: $e')),
+          );
+        }
+      }
+    });
+  }
+
+  // Search for destination places with autocomplete
+  Future<void> _searchDestination(String query) async {
+    if (query.length < 3) {
+      setState(() {
+        _destinationSearchResults = [];
+      });
+      return;
+    }
+
+    // Cancel previous debounce timer
+    _destinationSearchDebounce?.cancel();
+
+    // Debounce the search to reduce API calls
+    _destinationSearchDebounce = Timer(const Duration(milliseconds: 500), () async {
+      setState(() {
+        _isSearching = true;
+        _destinationSearchResults = [];
+      });
+
+      try {
+        final results = await context.read<MapsNavigationCubit>().searchPlaces(query);
+
+        if (!mounted) return;
+
+        setState(() {
+          _destinationSearchResults = results;
+          _isSearching = false;
+        });
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isSearching = false;
+            _destinationSearchResults = [];
+          });
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Error searching for places: $e')),
+          );
+        }
+      }
+    });
+  }
+
+  // Select origin from search results
+  void _selectOrigin(PlaceModel place) {
+    setState(() {
+      _selectedOrigin = place;
+      _originController.text = place.name;
+      _originSearchResults = [];
+    });
+  }
+
+  // Select destination from search results
+  void _selectDestination(PlaceModel place) {
+    setState(() {
+      _selectedDestination = place;
+      _destinationController.text = place.name;
+      _destinationSearchResults = [];
+    });
+  }
+
+  // Use current location as origin
+  Future<void> _useCurrentLocationAsOrigin() async {
+    setState(() {
+      _isSearching = true;
+    });
+
+    try {
+      // Get current position
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      if (!mounted) return;
+
+      // Create a place model for current location
+      final latLng = LatLng(position.latitude, position.longitude);
+
+      // Get address for current location using reverse geocoding
+      final results = await context.read<MapsNavigationCubit>().searchPlaces(
+        '${position.latitude},${position.longitude}',
+      );
+
+      String placeName = 'Current Location';
+      String placeAddress = 'Your Location';
+
+      // If we got results from reverse geocoding, use the first one
+      if (results.isNotEmpty) {
+        placeName = results.first.name;
+        placeAddress = results.first.address;
+      }
+
+      // Create a place model for current location
+      final currentPlace = PlaceModel(
+        placeId: 'current_location',
+        name: placeName,
+        address: placeAddress,
+        location: latLng,
+      );
+
+      // Set as selected origin
+      setState(() {
+        _selectedOrigin = currentPlace;
+        _originController.text = placeName;
+        _originSearchResults = [];
+        _isSearching = false;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Current location set as origin')),
+        );
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _isSearching = false;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Error getting current location: $e')),
+      );
+    }
   }
 }
 

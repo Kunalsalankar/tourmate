@@ -7,6 +7,7 @@ import 'package:overlay_support/overlay_support.dart';
 import '../core/colors.dart';
 import '../core/models/trip_model.dart';
 import '../cubit/trip_cubit.dart';
+import '../cubit/maps_navigation_cubit.dart';
 import '../core/repositories/trip_repository.dart';
 import '../widgets/trip_form_widget.dart';
 import '../cubit/bottom_nav_cubit.dart';
@@ -544,16 +545,26 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
-  void _createNewTrip() {
+  void _createNewTrip() async {
+    // Create and initialize MapsNavigationCubit
+    final mapsNavCubit = MapsNavigationCubit();
+    await mapsNavCubit.initialize();
+    
+    if (!mounted) return;
+    
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => BlocProvider.value(
-          value: _tripCubit,
+        builder: (context) => MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: _tripCubit),
+            BlocProvider.value(value: mapsNavCubit),
+          ],
           child: const TripFormWidget(),
         ),
       ),
     ).then((_) {
+      mapsNavCubit.close();
       _loadTrips();
     });
   }
@@ -645,15 +656,27 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
-  void _editTrip(TripModel trip) {
-    Navigator.of(context).push(
+  void _editTrip(TripModel trip) async {
+    // Create and initialize MapsNavigationCubit
+    final mapsNavCubit = MapsNavigationCubit();
+    await mapsNavCubit.initialize();
+    
+    if (!mounted) return;
+    
+    Navigator.push(
+      context,
       MaterialPageRoute(
-        builder: (context) => BlocProvider.value(
-          value: _tripCubit,
+        builder: (context) => MultiBlocProvider(
+          providers: [
+            BlocProvider.value(value: _tripCubit),
+            BlocProvider.value(value: mapsNavCubit),
+          ],
           child: TripFormWidget(trip: trip, isEditing: true),
         ),
       ),
-    );
+    ).then((_) {
+      mapsNavCubit.close();
+    });
   }
 
   void _handleTripAction(String action, TripModel trip) {
