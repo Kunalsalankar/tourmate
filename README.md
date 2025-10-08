@@ -5,6 +5,12 @@ A comprehensive Flutter application for managing travel trips with user and admi
 ## Features
 
 ### User Features
+- **Automatic Trip Detection** ⭐ NEW:
+  - Automatically detect trip start/end using GPS
+  - Track distance, duration, and speed
+  - Infer mode of transport based on speed patterns
+  - User confirmation with purpose, companions, and cost
+  - Background location tracking
 - **Trip Creation**: Create detailed trip records with:
   - Trip number
   - Origin and destination
@@ -19,7 +25,6 @@ A comprehensive Flutter application for managing travel trips with user and admi
 ### Admin Features
 - **Trip Analytics**: Comprehensive overview of all user trips
 - **Trip Management**: View all trips with filtering and search capabilities
-- **User Statistics**: Track active users and trip patterns
 - **Real-time Updates**: Live data updates from Firestore
 
 ## Technical Architecture
@@ -48,22 +53,30 @@ lib/
 ├── core/
 │   ├── colors.dart                  # App color scheme
 │   ├── models/
-│   │   └── trip_model.dart          # Trip data model
+│   │   ├── trip_model.dart          # Trip data model
+│   │   └── auto_trip_model.dart     # Auto-detected trip model ⭐
 │   ├── navigation/
 │   │   ├── app_router.dart          # Route configuration
 │   │   └── navigation_service.dart   # Navigation utilities
-│   └── repositories/
-│       └── trip_repository.dart     # Firestore operations
+│   ├── repositories/
+│   │   ├── trip_repository.dart     # Firestore operations
+│   │   └── auto_trip_repository.dart # Auto-trip operations ⭐
+│   └── services/
+│       ├── location_service.dart    # Location tracking
+│       └── trip_detection_service.dart # Trip detection logic ⭐
 ├── cubit/
 │   ├── auth_cubit.dart              # Authentication state
 │   ├── navigation_cubit.dart        # Navigation state
-│   └── trip_cubit.dart              # Trip state management
+│   ├── trip_cubit.dart              # Trip state management
+│   └── trip_detection_cubit.dart    # Auto-detection state ⭐
 ├── screens/
 │   ├── role_selection_screen.dart   # User/Admin selection
 │   └── splash_screen.dart           # App splash screen
 ├── user/
 │   ├── home_screen.dart             # User main interface
 │   ├── sign_in_screen.dart          # User authentication
+│   ├── trip_detection_screen.dart   # Auto-detection UI ⭐
+│   ├── trip_confirmation_screen.dart # Trip confirmation UI ⭐
 │   └── sign_up/
 │       └── sign_up_screen.dart      # User registration
 └── widgets/
@@ -170,6 +183,9 @@ class TravellerInfo {
 - `firebase_core`: Firebase integration
 - `firebase_auth`: User authentication
 - `cloud_firestore`: Database operations
+- `geolocator`: GPS location tracking
+- `google_maps_flutter`: Map display and route visualization
+- `permission_handler`: Location permissions
 - `cupertino_icons`: iOS-style icons
 
 ## Contributing
@@ -183,6 +199,50 @@ class TravellerInfo {
 ## License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## Automatic Trip Detection
+
+The app now includes an **Automatic Trip Detection** feature that uses GPS to automatically track user trips. This feature:
+
+- Detects trip start when user moves continuously for 3 minutes
+- Tracks the entire route with GPS coordinates
+- Detects trip end when user stops for 5 minutes
+- Calculates distance, duration, and average speed
+- Infers mode of transport (walking, cycling, car, bus, etc.)
+- Prompts user to confirm details and add purpose/companions/cost
+
+### Documentation
+
+- **Full Documentation**: See `AUTOMATIC_TRIP_DETECTION.md`
+- **Integration Guide**: See `INTEGRATION_GUIDE.md`
+- **Quick Reference**: See `QUICK_REFERENCE.md`
+
+### How It Works
+
+1. User enables automatic detection
+2. App monitors GPS in background
+3. Trip starts when sustained movement detected
+4. App tracks route and calculates statistics
+5. Trip ends when user stops moving
+6. User confirms trip details and purpose
+7. Data saved to Firestore for analysis
+
+### Detection Algorithm
+
+- **Trip Start**: Speed > 2 m/s for 3 minutes
+- **Trip End**: Speed < 1 m/s for 5 minutes
+- **Minimum Distance**: 300 meters
+- **GPS Updates**: Every 30 seconds or 10 meters
+
+### Mode Detection
+
+Based on speed patterns:
+- Walking: 0-7 km/h
+- Cycling: 7-25 km/h
+- Motorcycle: 25-60 km/h
+- Car: 40-120 km/h
+- Bus: 30-80 km/h (with stops)
+- Train: >80 km/h
 
 ## Support
 
