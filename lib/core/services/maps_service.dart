@@ -9,6 +9,10 @@ import 'package:http/http.dart' as http;
 import '../models/place_model.dart';
 import 'cache_service.dart';
 
+// Conditional import for web-specific implementation
+import 'maps_service_stub.dart'
+    if (dart.library.html) 'maps_service_web.dart';
+
 /// A service that handles Google Maps API interactions
 class MapsService {
   // Singleton instance
@@ -53,7 +57,23 @@ class MapsService {
         return cachedPlaces;
       }
 
-      // If not in cache, fetch from API
+      // Use web-specific implementation on web to avoid CORS
+      if (kIsWeb) {
+        if (kDebugMode) {
+          print('Using web-specific implementation for places search');
+        }
+        final webService = MapsServiceWeb();
+        final results = await webService.searchPlaces(query);
+        
+        // Cache the results
+        if (results.isNotEmpty) {
+          await _cacheService.cachePlaces(query, results);
+        }
+        
+        return results;
+      }
+
+      // Mobile/Desktop: Use REST API via google_maps_webservice package
       final places = places_webservice.GoogleMapsPlaces(apiKey: _apiKey);
       final response = await places.searchByText(query);
 
@@ -101,7 +121,23 @@ class MapsService {
         return cachedPlaces;
       }
 
-      // Use Google Places Autocomplete API for better results
+      // Use web-specific implementation on web to avoid CORS
+      if (kIsWeb) {
+        if (kDebugMode) {
+          print('Using web-specific implementation for autocomplete');
+        }
+        final webService = MapsServiceWeb();
+        final results = await webService.searchPlacesAutocomplete(query);
+        
+        // Cache the results
+        if (results.isNotEmpty) {
+          await _cacheService.cachePlaces(cacheKey, results);
+        }
+        
+        return results;
+      }
+
+      // Mobile/Desktop: Use REST API
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/place/autocomplete/json?'
         'input=$query'
@@ -193,7 +229,28 @@ class MapsService {
         return cachedDirections;
       }
 
-      // If not in cache, fetch from API
+      // Use web-specific implementation on web to avoid CORS
+      if (kIsWeb) {
+        if (kDebugMode) {
+          print('Using web-specific implementation for directions');
+        }
+        final webService = MapsServiceWeb();
+        final result = await webService.getDirections(origin, destination);
+        
+        // Cache the results if successful
+        if (result.isNotEmpty && result.containsKey('polylineCoordinates')) {
+          await _cacheService.cacheDirections(
+            cacheKey,
+            result['polylineCoordinates'] as List<LatLng>,
+            result['distance'] as String,
+            result['duration'] as String,
+          );
+        }
+        
+        return result;
+      }
+
+      // Mobile/Desktop: Use REST API
       final url = Uri.parse(
         'https://maps.googleapis.com/maps/api/directions/json?'
         'origin=${origin.latitude},${origin.longitude}'

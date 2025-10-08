@@ -452,7 +452,7 @@ class _TripFormWidgetState extends State<TripFormWidget> {
 
   Widget _buildTripTypeField() {
     return DropdownButtonFormField<TripType>(
-      value: _selectedTripType,
+      initialValue: _selectedTripType,
       decoration: InputDecoration(
         labelText: 'Trip Type',
         prefixIcon: const Icon(
@@ -491,7 +491,7 @@ class _TripFormWidgetState extends State<TripFormWidget> {
 
   Widget _buildModeField() {
     return DropdownButtonFormField<String>(
-      value: _modeController.text.isEmpty ? null : _modeController.text,
+      initialValue: _modeController.text.isEmpty ? null : _modeController.text,
       decoration: InputDecoration(
         labelText: 'Mode of Transport',
         prefixIcon: const Icon(

@@ -131,7 +131,7 @@ class RouteTrackingService {
         final places = await _mapsService.getNearbyPlaces(
           [LatLng(point.latitude, point.longitude)],
           1500,
-          ['point_of_interest'],
+          ['tourist_attraction', 'point_of_interest', 'museum', 'park'],
         );
         allNearbyPlaces.addAll(places);
       }
@@ -216,10 +216,14 @@ class RouteTrackingService {
       // Send notification if within radius
       if (distance <= _notificationRadius) {
         _notificationService.showNearbyPlaceNotification(
-          place.name as PlaceModel,
+          place,
           'You are near ${place.name}. ${place.address}',
         );
         _notifiedPlaceIds.add(place.placeId);
+        
+        if (kDebugMode) {
+          print('🔔 Notification sent for: ${place.name} (${distance.toStringAsFixed(0)}m away)');
+        }
       }
     }
   }
