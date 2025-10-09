@@ -10,6 +10,10 @@ import 'core/services/notification_service.dart';
 import 'core/services/trip_notification_scheduler.dart';
 
 void main() async {
+  print('\n\n========================================');
+  print('🚀 MAIN FUNCTION STARTED - VERSION 2.0');
+  print('========================================\n');
+  
   WidgetsFlutterBinding.ensureInitialized();
   
   // Load environment variables
@@ -21,16 +25,18 @@ void main() async {
   // Initialize timezone data for scheduled notifications
   tz.initializeTimeZones();
   
-  // Initialize notification service
+  // Initialize notification service (don't request permissions yet - will be done in splash screen)
   final notificationService = NotificationService();
   await notificationService.initialize();
-  await notificationService.requestPermissions();
   
   // Initialize trip notification scheduler
   final tripNotificationScheduler = TripNotificationScheduler(
     notificationService: notificationService,
   );
   await tripNotificationScheduler.initialize();
+  
+  print('\n🔧 [MAIN] Notification scheduler created: ${tripNotificationScheduler != null}');
+  print('🔧 [MAIN] Starting app with scheduler...\n');
   
   runApp(
     OverlaySupport.global(

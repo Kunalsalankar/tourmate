@@ -16,15 +16,21 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    print('🏗️ [APP] Building MyApp...');
+    print('   Scheduler received: ${tripNotificationScheduler != null}');
+    
     return MultiBlocProvider(
       providers: [
         BlocProvider(create: (_) => AuthCubit()),
         BlocProvider(create: (_) => NavigationCubit()),
         BlocProvider(
-          create: (_) => TripCubit(
-            tripRepository: TripRepository(),
-            notificationScheduler: tripNotificationScheduler,
-          ),
+          create: (_) {
+            print('🏗️ [APP] Creating TripCubit with scheduler: ${tripNotificationScheduler != null}');
+            return TripCubit(
+              tripRepository: TripRepository(),
+              notificationScheduler: tripNotificationScheduler,
+            );
+          },
         ),
       ],
       child: MaterialApp(

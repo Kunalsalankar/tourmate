@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
+import 'package:permission_handler/permission_handler.dart';
 import '../models/place_model.dart';
 import '../models/trip_model.dart';
 
@@ -45,10 +46,19 @@ class NotificationService {
     );
   }
 
-  /// Request notification permissions
+  /// Request notification permissions (for both Android 13+ and iOS)
   Future<bool> requestPermissions() async {
+    // Request permissions for Android 13+ (API level 33+)
+    if (await Permission.notification.isDenied) {
+      final status = await Permission.notification.request();
+      if (status.isDenied || status.isPermanentlyDenied) {
+        debugPrint('Notification permission denied');
+        return false;
+      }
+    }
+
     // Request permissions for iOS
-    final bool? result = await _flutterLocalNotificationsPlugin
+    final bool? iosResult = await _flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
             IOSFlutterLocalNotificationsPlugin>()
         ?.requestPermissions(
@@ -57,7 +67,13 @@ class NotificationService {
           sound: true,
         );
 
-    return result ?? false;
+    return iosResult ?? true; // Return true for Android if permission granted
+  }
+
+  /// Check if notification permissions are granted
+  Future<bool> arePermissionsGranted() async {
+    final status = await Permission.notification.status;
+    return status.isGranted;
   }
 
   /// Show a notification for a nearby place
@@ -152,15 +168,27 @@ class NotificationService {
 
   /// Schedule a notification for a future trip
   Future<void> scheduleTripNotification(TripModel trip) async {
+    debugPrint('📅 [NOTIFICATION] Attempting to schedule trip notification');
+    debugPrint('   Trip ID: ${trip.id ?? trip.tripNumber}');
+    debugPrint('   Trip Type: ${trip.tripType}');
+    debugPrint('   Trip Time: ${trip.time}');
+    
     if (trip.tripType != TripType.future) {
+      debugPrint('   ❌ Not a future trip, skipping notification');
       return; // Only schedule notifications for future trips
     }
 
     // Calculate notification time (at trip start time)
     final scheduledDate = tz.TZDateTime.from(trip.time, tz.local);
+    final now = tz.TZDateTime.now(tz.local);
+    
+    debugPrint('   Scheduled Date: $scheduledDate');
+    debugPrint('   Current Time: $now');
+    debugPrint('   Time Until Trip: ${scheduledDate.difference(now).inMinutes} minutes');
     
     // Don't schedule if the time has already passed
-    if (scheduledDate.isBefore(tz.TZDateTime.now(tz.local))) {
+    if (scheduledDate.isBefore(now)) {
+      debugPrint('   ❌ Trip time has passed, skipping notification');
       return;
     }
 
@@ -190,17 +218,26 @@ class NotificationService {
     );
 
     // Schedule the notification
-    await _flutterLocalNotificationsPlugin.zonedSchedule(
-      trip.id?.hashCode ?? trip.tripNumber.hashCode, // Use trip ID hash as notification ID
-      'Trip Starting Now! 🚀',
-      'Your trip from ${trip.origin} to ${trip.destination} is starting now. Have a safe journey!',
-      scheduledDate,
-      platformChannelSpecifics,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: trip.id ?? trip.tripNumber,
-    );
+    final notificationId = trip.id?.hashCode ?? trip.tripNumber.hashCode;
+    debugPrint('   Notification ID: $notificationId');
+    
+    try {
+      await _flutterLocalNotificationsPlugin.zonedSchedule(
+        notificationId,
+        'Trip Starting Now! 🚀',
+        'Your trip from ${trip.origin} to ${trip.destination} is starting now. Have a safe journey!',
+        scheduledDate,
+        platformChannelSpecifics,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: trip.id ?? trip.tripNumber,
+      );
+      debugPrint('   ✅ Trip notification scheduled successfully!');
+    } catch (e) {
+      debugPrint('   ❌ Error scheduling notification: $e');
+      rethrow;
+    }
   }
 
   /// Schedule a reminder notification before trip start (e.g., 1 hour before)
@@ -208,16 +245,25 @@ class NotificationService {
     TripModel trip, {
     Duration reminderBefore = const Duration(hours: 1),
   }) async {
+    debugPrint('⏰ [NOTIFICATION] Attempting to schedule reminder notification');
+    debugPrint('   Reminder Before: ${reminderBefore.inMinutes} minutes');
+    
     if (trip.tripType != TripType.future) {
+      debugPrint('   ❌ Not a future trip, skipping reminder');
       return;
     }
 
     // Calculate notification time (before trip start time)
     final reminderTime = trip.time.subtract(reminderBefore);
     final scheduledDate = tz.TZDateTime.from(reminderTime, tz.local);
+    final now = tz.TZDateTime.now(tz.local);
+    
+    debugPrint('   Reminder Time: $scheduledDate');
+    debugPrint('   Current Time: $now');
     
     // Don't schedule if the time has already passed
-    if (scheduledDate.isBefore(tz.TZDateTime.now(tz.local))) {
+    if (scheduledDate.isBefore(now)) {
+      debugPrint('   ❌ Reminder time has passed, skipping');
       return;
     }
 
@@ -247,17 +293,26 @@ class NotificationService {
     );
 
     // Schedule the reminder notification
-    await _flutterLocalNotificationsPlugin.zonedSchedule(
-      (trip.id?.hashCode ?? trip.tripNumber.hashCode) + 1, // Different ID for reminder
-      'Upcoming Trip Reminder ⏰',
-      'Your trip from ${trip.origin} to ${trip.destination} starts in ${reminderBefore.inHours} hour(s). Get ready!',
-      scheduledDate,
-      platformChannelSpecifics,
-      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
-      uiLocalNotificationDateInterpretation:
-          UILocalNotificationDateInterpretation.absoluteTime,
-      payload: trip.id ?? trip.tripNumber,
-    );
+    final notificationId = (trip.id?.hashCode ?? trip.tripNumber.hashCode) + 1;
+    debugPrint('   Reminder Notification ID: $notificationId');
+    
+    try {
+      await _flutterLocalNotificationsPlugin.zonedSchedule(
+        notificationId,
+        'Upcoming Trip Reminder ⏰',
+        'Your trip from ${trip.origin} to ${trip.destination} starts in ${reminderBefore.inHours} hour(s). Get ready!',
+        scheduledDate,
+        platformChannelSpecifics,
+        androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+        uiLocalNotificationDateInterpretation:
+            UILocalNotificationDateInterpretation.absoluteTime,
+        payload: trip.id ?? trip.tripNumber,
+      );
+      debugPrint('   ✅ Reminder notification scheduled successfully!');
+    } catch (e) {
+      debugPrint('   ❌ Error scheduling reminder: $e');
+      rethrow;
+    }
   }
 
   /// Cancel a scheduled trip notification

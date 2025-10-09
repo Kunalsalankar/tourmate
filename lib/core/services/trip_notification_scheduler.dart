@@ -26,24 +26,34 @@ class TripNotificationScheduler {
     TripModel trip, {
     bool includeReminder = true,
   }) async {
+    print('\n🔔 [SCHEDULER] scheduleNotificationsForTrip called');
+    print('   Trip ID: ${trip.id}');
+    print('   Trip Type: ${trip.tripType}');
+    print('   Include Reminder: $includeReminder');
+    
     if (trip.tripType != TripType.future || trip.id == null) {
+      print('   ❌ Cannot schedule: tripType=${trip.tripType}, id=${trip.id}');
       return;
     }
 
     try {
+      print('   📱 Scheduling trip start notification...');
       // Schedule notification at trip start time
       await _notificationService.scheduleTripNotification(trip);
 
       // Schedule reminder notification 1 hour before
       if (includeReminder) {
+        print('   ⏰ Scheduling reminder notification...');
         await _notificationService.scheduleTripReminderNotification(
           trip,
           reminderBefore: const Duration(hours: 1),
         );
       }
+      print('   ✅ All notifications scheduled successfully!');
     } catch (e) {
       // Log error but don't throw - notification scheduling shouldn't block trip creation
-      print('Error scheduling trip notifications: $e');
+      print('   ❌ Error scheduling trip notifications: $e');
+      print('   Stack trace: ${StackTrace.current}');
     }
   }
 

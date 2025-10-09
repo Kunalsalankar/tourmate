@@ -20,18 +20,33 @@ class TripCubit extends Cubit<TripState> {
   Future<void> createTrip(TripModel trip) async {
     emit(TripLoading());
     try {
+      print('\n🚀 [TRIP_CUBIT] Creating trip...');
+      print('   Trip Number: ${trip.tripNumber}');
+      print('   Trip Type: ${trip.tripType}');
+      print('   Trip Time: ${trip.time}');
+      print('   Origin: ${trip.origin}');
+      print('   Destination: ${trip.destination}');
+      
       final tripId = await _tripRepository.createTrip(trip);
+      print('   ✅ Trip created with ID: $tripId');
       
       // Schedule notifications for future trips
       if (trip.tripType == TripType.future && _notificationScheduler != null) {
+        print('   📲 Scheduling notifications for future trip...');
         final createdTrip = trip.copyWith(id: tripId);
         await _notificationScheduler!.scheduleNotificationsForTrip(createdTrip);
+        print('   ✅ Notifications scheduled');
+      } else if (trip.tripType != TripType.future) {
+        print('   ℹ️ Not a future trip, skipping notifications');
+      } else if (_notificationScheduler == null) {
+        print('   ⚠️ Notification scheduler is null!');
       }
       
       emit(TripCreated());
       // Refresh the trips list
       await getUserTrips();
     } catch (e) {
+      print('   ❌ Error creating trip: $e');
       emit(TripError(e.toString()));
     }
   }

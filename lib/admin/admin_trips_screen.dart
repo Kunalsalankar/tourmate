@@ -16,7 +16,6 @@ class AdminTripsScreen extends StatefulWidget {
 }
 
 class _AdminTripsScreenState extends State<AdminTripsScreen> {
-  late TripCubit _tripCubit;
   String _selectedFilter = 'all';
   String _searchQuery = '';
   int _currentTabIndex = 0;
@@ -25,30 +24,25 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
   @override
   void initState() {
     super.initState();
-    _tripCubit = TripCubit(tripRepository: TripRepository());
-    _loadTrips();
+    // Use the TripCubit from parent BlocProvider
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTrips();
+    });
   }
 
   void _loadTrips() {
+    final tripCubit = context.read<TripCubit>();
     if (_currentTabIndex == 0) {
-      _tripCubit.getAllTrips();
+      tripCubit.getAllTrips();
     } else {
       // For admin, we still load all trips but will filter them locally
-      _tripCubit.getAllTrips();
+      tripCubit.getAllTrips();
     }
   }
 
   @override
-  void dispose() {
-    _tripCubit.close();
-    super.dispose();
-  }
-
-  @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: _tripCubit,
-      child: Scaffold(
+    return Scaffold(
         backgroundColor: AppColors.background,
         appBar: AppBar(
           title: const Text(
@@ -82,7 +76,6 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
           backgroundColor: AppColors.buttonPrimary,
           child: const Icon(Icons.refresh, color: AppColors.textOnPrimary),
         ),
-      ),
     );
   }
 

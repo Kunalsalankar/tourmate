@@ -1,10 +1,12 @@
 // ignore_for_file: deprecated_member_use
 
 import 'package:flutter/material.dart';
-import 'package:firebase_auth/firebase_auth.dart'; // Add this import
+import 'package:firebase_auth/firebase_auth.dart';
 import '../core/colors.dart';
-import '../user/home_screen.dart'; // Import your user home screen
-import '../user/sign_in_screen.dart'; // Import your sign in screen
+import '../core/services/notification_service.dart';
+import '../core/services/preferences_service.dart';
+import '../user/home_screen.dart';
+import '../user/sign_in_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -42,7 +44,25 @@ class _SplashScreenState extends State<SplashScreen>
   }
 
   Future<void> _checkAuthAndNavigate() async {
+    // Initialize preferences service
+    final prefsService = PreferencesService();
+    await prefsService.initialize();
+
+    // Request notification permissions on first launch
+    if (!prefsService.hasRequestedNotificationPermission) {
+      await _requestNotificationPermissions();
+      await prefsService.setNotificationPermissionRequested();
+    }
+
+    // Mark first launch as complete
+    if (prefsService.isFirstLaunch) {
+      await prefsService.setFirstLaunchComplete();
+    }
+
+    // Check auth and navigate
     final user = FirebaseAuth.instance.currentUser;
+    if (!mounted) return;
+    
     if (user != null) {
       // User is signed in, navigate to home
       Navigator.of(context).pushReplacement(
@@ -53,6 +73,61 @@ class _SplashScreenState extends State<SplashScreen>
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => SignInScreen()),
       );
+    }
+  }
+
+  Future<void> _requestNotificationPermissions() async {
+    final notificationService = NotificationService();
+    
+    // Show a dialog explaining why we need notification permissions
+    if (!mounted) return;
+    
+    final shouldRequest = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.notifications_active, color: AppColors.primary),
+            SizedBox(width: 12),
+            Text('Enable Notifications'),
+          ],
+        ),
+        content: const Text(
+          'Get notified when your trips are about to start!\n\n'
+          'We\'ll send you reminders for your upcoming trips so you never miss an adventure.',
+          style: TextStyle(fontSize: 16),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Not Now'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+              foregroundColor: AppColors.textOnPrimary,
+            ),
+            child: const Text('Enable'),
+          ),
+        ],
+      ),
+    );
+
+    if (shouldRequest == true) {
+      final granted = await notificationService.requestPermissions();
+      if (!mounted) return;
+      
+      if (granted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('✓ Notifications enabled successfully!'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
     }
   }
 

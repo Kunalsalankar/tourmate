@@ -17,14 +17,12 @@ import '../cubit/notification_cubit.dart';
 /// This screen provides the main interface for users to create, view, and manage their trips
 class UserHomeScreen extends StatefulWidget {
   const UserHomeScreen({super.key});
-
+  
   @override
   State<UserHomeScreen> createState() => _UserHomeScreenState();
 }
 
 class _UserHomeScreenState extends State<UserHomeScreen> {
-  late TripCubit _tripCubit;
-
   int _currentTabIndex = 0;
   final List<TripType> _tripTypes = TripType.values;
   bool _isCreatingTrip = false;
@@ -32,36 +30,31 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   @override
   void initState() {
     super.initState();
-    _tripCubit = TripCubit(tripRepository: TripRepository());
-    _loadTrips();
+    // Use the TripCubit from parent BlocProvider (which has the notification scheduler)
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadTrips();
+    });
   }
 
   void _loadTrips() {
+    final tripCubit = context.read<TripCubit>();
     if (_currentTabIndex == 0) {
-      _tripCubit.getUserTrips();
+      tripCubit.getUserTrips();
     } else {
-      _tripCubit.getTripsByType(_tripTypes[_currentTabIndex - 1]);
+      tripCubit.getTripsByType(_tripTypes[_currentTabIndex - 1]);
     }
-  }
-
-  @override
-  void dispose() {
-    _tripCubit.close();
-    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider.value(value: _tripCubit),
         BlocProvider(create: (_) => BottomNavCubit()),
         BlocProvider(create: (_) => NotificationCubit()),
       ],
       child: BlocBuilder<BottomNavCubit, int>(
         builder: (context, selectedIndex) {
           return BlocListener<NotificationCubit, NotificationState>(
-
               listener: (context, state) {
                 if (state.message != null && state.message!.isNotEmpty) {
                   showSimpleNotification(
@@ -584,7 +577,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       MaterialPageRoute(
         builder: (context) => MultiBlocProvider(
           providers: [
-            BlocProvider.value(value: _tripCubit),
+            BlocProvider.value(value: context.read<TripCubit>()),
             BlocProvider.value(value: mapsNavCubit),
           ],
           child: const TripFormWidget(),
@@ -592,113 +585,65 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       ),
     ).then((_) {
       mapsNavCubit.close();
-      _loadTrips();
-      if (mounted) {
-        setState(() {
-          _isCreatingTrip = false;
-        });
-      }
+      setState(() {
+        _isCreatingTrip = false;
+      });
     });
   }
 
   void _viewTripDetails(TripModel trip) {
     showDialog(
       context: context,
-      builder: (context) => _buildTripDetailsDialog(trip),
-    );
-  }
-
-  Widget _buildTripDetailsDialog(TripModel trip) {
-    return AlertDialog(
-      title: Text(trip.tripNumber),
-      content: SingleChildScrollView(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _buildDetailRow('Origin', trip.origin),
-            _buildDetailRow('Destination', trip.destination),
-            _buildDetailRow(
-              trip.tripType == TripType.past ? 'Start Time' : 'Time',
-              _formatDateTime(trip.time),
-            ),
-            if (trip.tripType == TripType.past && trip.endTime != null)
-              _buildDetailRow('End Time', _formatDateTime(trip.endTime!)),
-            _buildDetailRow('Mode', trip.mode),
-            if (trip.activities.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Activities:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              ...trip.activities.map((activity) => Text('• $activity')),
+      builder: (context) => AlertDialog(
+        title: Text('Trip #${trip.tripNumber}'),
+        content: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('From: ${trip.origin}'),
+              Text('To: ${trip.destination}'),
+              Text('Time: ${_formatDateTime(trip.time)}'),
+              Text('Mode: ${trip.mode}'),
+              if (trip.activities.isNotEmpty) ...[
+                const SizedBox(height: 8),
+                const Text('Activities:', style: TextStyle(fontWeight: FontWeight.bold)),
+                ...trip.activities.map((a) => Text('• $a')),
+              ],
             ],
-            if (trip.accompanyingTravellers.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Travellers:',
-                style: TextStyle(fontWeight: FontWeight.bold),
-              ),
-              ...trip.accompanyingTravellers.map(
-                (traveller) =>
-                    Text('• ${traveller.name} (${traveller.age} years old)'),
-              ),
-            ],
-          ],
-        ),
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            Navigator.of(context).pop();
-            _editTrip(trip);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.buttonPrimary,
-          ),
-          child: const Text(
-            'Edit',
-            style: TextStyle(color: AppColors.textOnPrimary),
           ),
         ),
-      ],
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 4),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          SizedBox(
-            width: 80,
-            child: Text(
-              '$label:',
-              style: const TextStyle(fontWeight: FontWeight.bold),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Close'),
+          ),
+          if (trip.tripType == TripType.future)
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop();
+                _editTrip(trip);
+              },
+              child: const Text('Edit'),
             ),
+          TextButton(
+            onPressed: () => _confirmDelete(trip),
+            child: const Text('Delete', style: TextStyle(color: Colors.red)),
           ),
-          Expanded(child: Text(value)),
         ],
       ),
     );
   }
 
   void _editTrip(TripModel trip) {
-    // Create cubit without initialization - it will initialize lazily when needed
     final mapsNavCubit = MapsNavigationCubit();
     
-    // Navigate immediately without waiting for initialization
     Navigator.push(
       context,
       MaterialPageRoute(
         builder: (context) => MultiBlocProvider(
           providers: [
-            BlocProvider.value(value: _tripCubit),
+            BlocProvider.value(value: context.read<TripCubit>()),
             BlocProvider.value(value: mapsNavCubit),
           ],
           child: TripFormWidget(trip: trip, isEditing: true),
@@ -709,25 +654,12 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     });
   }
 
-  void _handleTripAction(String action, TripModel trip) {
-    switch (action) {
-      case 'edit':
-        _editTrip(trip);
-        break;
-      case 'delete':
-        _showDeleteConfirmation(trip);
-        break;
-    }
-  }
-
-  void _showDeleteConfirmation(TripModel trip) {
+  void _confirmDelete(TripModel trip) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Delete Trip'),
-        content: Text(
-          'Are you sure you want to delete trip "${trip.tripNumber}"?',
-        ),
+        content: Text('Are you sure you want to delete trip #${trip.tripNumber}?'),
         actions: [
           TextButton(
             onPressed: () => Navigator.of(context).pop(),
@@ -736,7 +668,8 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           ElevatedButton(
             onPressed: () {
               Navigator.of(context).pop();
-              _tripCubit.deleteTrip(trip.id!);
+              Navigator.of(context).pop(); // Close details dialog too
+              context.read<TripCubit>().deleteTrip(trip.id!);
             },
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text(
