@@ -7,9 +7,12 @@ import '../cubit/auth_cubit.dart';
 import '../cubit/navigation_cubit.dart';
 import '../cubit/trip_cubit.dart';
 import '../core/repositories/trip_repository.dart';
+import '../core/services/trip_notification_scheduler.dart';
 
 class MyApp extends StatelessWidget {
-  const MyApp({super.key});
+  final TripNotificationScheduler tripNotificationScheduler;
+  
+  const MyApp({super.key, required this.tripNotificationScheduler});
 
   @override
   Widget build(BuildContext context) {
@@ -18,7 +21,10 @@ class MyApp extends StatelessWidget {
         BlocProvider(create: (_) => AuthCubit()),
         BlocProvider(create: (_) => NavigationCubit()),
         BlocProvider(
-          create: (_) => TripCubit(tripRepository: TripRepository()),
+          create: (_) => TripCubit(
+            tripRepository: TripRepository(),
+            notificationScheduler: tripNotificationScheduler,
+          ),
         ),
       ],
       child: MaterialApp(

@@ -29,7 +29,7 @@ android {
         applicationId = "com.example.tourmate"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        minSdk = 21  // Required for scheduled notifications
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
@@ -53,5 +53,4 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.0.4")
 }
 // Apply the Google services plugin for Firebase
-apply(plugin = "com.google.gms.google-services")
 apply(plugin = "com.google.gms.google-services")

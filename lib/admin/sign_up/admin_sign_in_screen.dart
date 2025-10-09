@@ -27,6 +27,8 @@ class _AdminSignInScreenState extends State<AdminSignInScreen> {
           style: TextStyle(
             fontWeight: FontWeight.bold,
             color: AppColors.textOnPrimary,
+         fontSize: 20
+         
           ),
         ),
         backgroundColor: AppColors.appBarBackground,

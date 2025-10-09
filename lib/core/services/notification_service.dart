@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/timezone.dart' as tz;
 import '../models/place_model.dart';
+import '../models/trip_model.dart';
 
 /// A service that handles local notifications
 class NotificationService {
@@ -146,5 +148,127 @@ class NotificationService {
   /// Cancel all notifications
   Future<void> cancelAllNotifications() async {
     await _flutterLocalNotificationsPlugin.cancelAll();
+  }
+
+  /// Schedule a notification for a future trip
+  Future<void> scheduleTripNotification(TripModel trip) async {
+    if (trip.tripType != TripType.future) {
+      return; // Only schedule notifications for future trips
+    }
+
+    // Calculate notification time (at trip start time)
+    final scheduledDate = tz.TZDateTime.from(trip.time, tz.local);
+    
+    // Don't schedule if the time has already passed
+    if (scheduledDate.isBefore(tz.TZDateTime.now(tz.local))) {
+      return;
+    }
+
+    // Android notification details
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'trip_reminder_channel',
+      'Trip Reminders',
+      channelDescription: 'Notifications for upcoming trip reminders',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+    );
+
+    // iOS notification details
+    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+        DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    // Notification details for all platforms
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+      iOS: iOSPlatformChannelSpecifics,
+    );
+
+    // Schedule the notification
+    await _flutterLocalNotificationsPlugin.zonedSchedule(
+      trip.id?.hashCode ?? trip.tripNumber.hashCode, // Use trip ID hash as notification ID
+      'Trip Starting Now! 🚀',
+      'Your trip from ${trip.origin} to ${trip.destination} is starting now. Have a safe journey!',
+      scheduledDate,
+      platformChannelSpecifics,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: trip.id ?? trip.tripNumber,
+    );
+  }
+
+  /// Schedule a reminder notification before trip start (e.g., 1 hour before)
+  Future<void> scheduleTripReminderNotification(
+    TripModel trip, {
+    Duration reminderBefore = const Duration(hours: 1),
+  }) async {
+    if (trip.tripType != TripType.future) {
+      return;
+    }
+
+    // Calculate notification time (before trip start time)
+    final reminderTime = trip.time.subtract(reminderBefore);
+    final scheduledDate = tz.TZDateTime.from(reminderTime, tz.local);
+    
+    // Don't schedule if the time has already passed
+    if (scheduledDate.isBefore(tz.TZDateTime.now(tz.local))) {
+      return;
+    }
+
+    // Android notification details
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'trip_reminder_channel',
+      'Trip Reminders',
+      channelDescription: 'Notifications for upcoming trip reminders',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+    );
+
+    // iOS notification details
+    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+        DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+    );
+
+    // Notification details for all platforms
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+      iOS: iOSPlatformChannelSpecifics,
+    );
+
+    // Schedule the reminder notification
+    await _flutterLocalNotificationsPlugin.zonedSchedule(
+      (trip.id?.hashCode ?? trip.tripNumber.hashCode) + 1, // Different ID for reminder
+      'Upcoming Trip Reminder ⏰',
+      'Your trip from ${trip.origin} to ${trip.destination} starts in ${reminderBefore.inHours} hour(s). Get ready!',
+      scheduledDate,
+      platformChannelSpecifics,
+      androidScheduleMode: AndroidScheduleMode.exactAllowWhileIdle,
+      uiLocalNotificationDateInterpretation:
+          UILocalNotificationDateInterpretation.absoluteTime,
+      payload: trip.id ?? trip.tripNumber,
+    );
+  }
+
+  /// Cancel a scheduled trip notification
+  Future<void> cancelTripNotification(String tripId) async {
+    final notificationId = tripId.hashCode;
+    await _flutterLocalNotificationsPlugin.cancel(notificationId);
+    await _flutterLocalNotificationsPlugin.cancel(notificationId + 1); // Cancel reminder too
+  }
+
+  /// Get all pending notifications
+  Future<List<PendingNotificationRequest>> getPendingNotifications() async {
+    return await _flutterLocalNotificationsPlugin.pendingNotificationRequests();
   }
 }

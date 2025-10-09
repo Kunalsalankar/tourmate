@@ -1,21 +1,33 @@
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../core/models/trip_model.dart';
 import '../core/repositories/trip_repository.dart';
+import '../core/services/trip_notification_scheduler.dart';
 
 /// Cubit for managing trip-related state
 /// This cubit handles all trip operations including creation, retrieval, and management
 class TripCubit extends Cubit<TripState> {
   final TripRepository _tripRepository;
+  final TripNotificationScheduler? _notificationScheduler;
 
-  TripCubit({required TripRepository tripRepository})
-    : _tripRepository = tripRepository,
-      super(TripInitial());
+  TripCubit({
+    required TripRepository tripRepository,
+    TripNotificationScheduler? notificationScheduler,
+  })  : _tripRepository = tripRepository,
+        _notificationScheduler = notificationScheduler,
+        super(TripInitial());
 
   /// Create a new trip
   Future<void> createTrip(TripModel trip) async {
     emit(TripLoading());
     try {
-      await _tripRepository.createTrip(trip);
+      final tripId = await _tripRepository.createTrip(trip);
+      
+      // Schedule notifications for future trips
+      if (trip.tripType == TripType.future && _notificationScheduler != null) {
+        final createdTrip = trip.copyWith(id: tripId);
+        await _notificationScheduler!.scheduleNotificationsForTrip(createdTrip);
+      }
+      
       emit(TripCreated());
       // Refresh the trips list
       await getUserTrips();
@@ -77,6 +89,13 @@ class TripCubit extends Cubit<TripState> {
     emit(TripLoading());
     try {
       await _tripRepository.updateTrip(tripId, trip);
+      
+      // Reschedule notifications if it's a future trip
+      if (_notificationScheduler != null) {
+        final updatedTrip = trip.copyWith(id: tripId);
+        await _notificationScheduler!.rescheduleNotificationsForTrip(updatedTrip);
+      }
+      
       emit(TripUpdated());
       // Refresh the trips list
       await getUserTrips();
@@ -89,6 +108,11 @@ class TripCubit extends Cubit<TripState> {
   Future<void> deleteTrip(String tripId) async {
     emit(TripLoading());
     try {
+      // Cancel any scheduled notifications for this trip
+      if (_notificationScheduler != null) {
+        await _notificationScheduler!.cancelNotificationsForTrip(tripId);
+      }
+      
       await _tripRepository.deleteTrip(tripId);
       emit(TripDeleted());
       // Refresh the trips list
