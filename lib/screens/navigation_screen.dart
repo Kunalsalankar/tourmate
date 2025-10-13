@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:geolocator/geolocator.dart';
+import '../cubit/location_comments_cubit.dart';
 import '../core/colors.dart';
 import '../core/models/place_model.dart';
 import '../cubit/maps_navigation_cubit.dart';
@@ -14,7 +15,7 @@ import '../core/services/connectivity_service.dart';
 class NavigationScreen extends StatefulWidget {
   final String? initialOrigin;
   final String? initialDestination;
-  
+
   const NavigationScreen({
     super.key,
     this.initialOrigin,
@@ -49,11 +50,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
   // Loading state
   bool _isSearching = false;
-  
+
   // Connectivity service
   final ConnectivityService _connectivityService = ConnectivityService();
   bool _isConnected = true;
-  
+
   // Debounce timers for search
   Timer? _originSearchDebounce;
   Timer? _destinationSearchDebounce;
@@ -64,18 +65,18 @@ class _NavigationScreenState extends State<NavigationScreen> {
     print('[DEBUG] NavigationScreen initState');
     // Initialize the maps navigation cubit
     context.read<MapsNavigationCubit>().initialize();
-    
+
     // Setup connectivity listener
     _connectivityService.connectivityStream.listen((isConnected) {
       setState(() {
         _isConnected = isConnected;
       });
-      
+
       if (!isConnected) {
         _showConnectivityWarning();
       }
     });
-    
+
     // Pre-fill origin and destination if provided
     if (widget.initialOrigin != null) {
       _originController.text = widget.initialOrigin!;
@@ -84,7 +85,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
         _searchOrigin(widget.initialOrigin!);
       });
     }
-    
+
     if (widget.initialDestination != null) {
       _destinationController.text = widget.initialDestination!;
       // Trigger search to auto-populate
@@ -104,14 +105,16 @@ class _NavigationScreenState extends State<NavigationScreen> {
     _destinationSearchDebounce?.cancel();
     super.dispose();
   }
-  
+
   /// Show connectivity warning when network is lost
   void _showConnectivityWarning() {
     if (!mounted) return;
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: const Text('Network connection lost. Some features may not work properly.'),
+        content: const Text(
+          'Network connection lost. Some features may not work properly.',
+        ),
         backgroundColor: Colors.red,
         duration: const Duration(seconds: 5),
         action: SnackBarAction(
@@ -135,103 +138,155 @@ class _NavigationScreenState extends State<NavigationScreen> {
   @override
   Widget build(BuildContext context) {
     print('[DEBUG] NavigationScreen build');
-    return GestureDetector(
-      onTap: () {
-        // Dismiss keyboard and clear search results when tapping outside
-        FocusScope.of(context).unfocus();
-        if (_originSearchResults.isNotEmpty || _destinationSearchResults.isNotEmpty) {
-          setState(() {
-            _originSearchResults = [];
-            _destinationSearchResults = [];
-          });
-        }
-      },
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Navigation'),
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-        ),
-        body: BlocConsumer<MapsNavigationCubit, MapsNavigationState>(
-        listener: (context, state) {
-          print('[DEBUG] BlocConsumer listener: $state');
-          if (state is MapsNavigationError) {
-            print('[DEBUG] Showing error: ${state.message}');
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text(state.message)));
-          } else if (state is RouteLoaded) {
-            print('[DEBUG] RouteLoaded: updating map');
-            _updateMapWithRoute(state);
+    return BlocProvider<LocationCommentsCubit>(
+      create: (_) => LocationCommentsCubit()..startListeningAll(),
+      child: GestureDetector(
+        onTap: () {
+          // Dismiss keyboard and clear search results when tapping outside
+          FocusScope.of(context).unfocus();
+          if (_originSearchResults.isNotEmpty ||
+              _destinationSearchResults.isNotEmpty) {
+            setState(() {
+              _originSearchResults = [];
+              _destinationSearchResults = [];
+            });
           }
         },
-        builder: (context, state) {
-          print('[DEBUG] BlocConsumer builder: $state');
-          return Column(
-            children: [
-              // Search bars for origin and destination
-              _buildSearchSection(),
-
-              // Google Map
-              Expanded(
-                child: Stack(
-                  children: [
-                    // Map
-                    GoogleMap(
-                      mapType: MapType.normal,
-                      initialCameraPosition: const CameraPosition(
-                        target: LatLng(20.5937, 78.9629), // Center of India
-                        zoom: 5,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Navigation'),
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+          ),
+          body: MultiBlocListener(
+            listeners: [
+              BlocListener<LocationCommentsCubit, LocationCommentsState>(
+                listener: (context, state) {
+                  if (state is LocationCommentsLoaded) {
+                    // Rebuild comment markers without setState by reconstructing markers set
+                    final commentMarkers = state.comments.map(
+                      (c) => Marker(
+                        markerId: MarkerId('comment_${c.id}'),
+                        position: c.position,
+                        icon: BitmapDescriptor.defaultMarkerWithHue(
+                          BitmapDescriptor.hueAzure,
+                        ),
+                        infoWindow: InfoWindow(
+                          title: c.userName,
+                          snippet: c.comment,
+                        ),
                       ),
-                      onMapCreated: (GoogleMapController controller) {
-                        _controller.complete(controller);
-                        // Set map style for better performance (optional)
-                        controller.setMapStyle(null);
-                      },
-                      markers: _markers,
-                      polylines: _polylines,
-                      circles: _circles,
-                      myLocationEnabled: true,
-                      myLocationButtonEnabled: true,
-                      compassEnabled: true,
-                      zoomControlsEnabled: true,
-                      // Performance optimizations
-                      liteModeEnabled: false, // Keep full features
-                      tiltGesturesEnabled: false, // Disable tilt for better performance
-                      rotateGesturesEnabled: false, // Disable rotation for better performance
-                      buildingsEnabled: false, // Disable 3D buildings for faster rendering
-                      trafficEnabled: false, // Disable traffic layer
-                      indoorViewEnabled: false, // Disable indoor maps
-                      // Reduce map rendering updates
-                      onCameraMove: (CameraPosition position) {
-                        // Store the current camera position
-                        _lastMapPosition = position;
-                      },
-                      // Only update when camera movement is idle
-                      onCameraIdle: () {
-                        // Camera movement finished, can trigger updates if needed
-                      },
-                    ),
-
-                    // Loading indicator
-                    if (state is MapsNavigationLoading)
-                      const Center(child: CircularProgressIndicator()),
-
-                    // Navigation overlay when active
-                    if (state is MapsNavigationActive && state.isNavigating)
-                      _buildNavigationOverlay(state),
-                  ],
-                ),
+                    );
+                    // Keep existing non-comment markers
+                    final nonComment = _markers.where(
+                      (m) => !m.markerId.value.startsWith('comment_'),
+                    );
+                    _markers
+                      ..clear()
+                      ..addAll(nonComment)
+                      ..addAll(commentMarkers);
+                  } else if (state is LocationCommentsError) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          'Failed to save comment: ${state.message}',
+                        ),
+                      ),
+                    );
+                  }
+                },
               ),
             ],
-          );
-        },
-      ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: _getCurrentLocation,
-          backgroundColor: AppColors.primary,
-          foregroundColor: Colors.white,
-          child: const Icon(Icons.my_location),
+            child: BlocConsumer<MapsNavigationCubit, MapsNavigationState>(
+              listener: (context, state) {
+                print('[DEBUG] BlocConsumer listener: $state');
+                if (state is MapsNavigationError) {
+                  print('[DEBUG] Showing error: ${state.message}');
+                  ScaffoldMessenger.of(
+                    context,
+                  ).showSnackBar(SnackBar(content: Text(state.message)));
+                } else if (state is RouteLoaded) {
+                  print('[DEBUG] RouteLoaded: updating map');
+                  _updateMapWithRoute(state);
+                }
+              },
+              builder: (context, state) {
+                print('[DEBUG] BlocConsumer builder: $state');
+                return Column(
+                  children: [
+                    // Search bars for origin and destination
+                    _buildSearchSection(),
+
+                    // Google Map
+                    Expanded(
+                      child: Stack(
+                        children: [
+                          // Map
+                          GoogleMap(
+                            mapType: MapType.normal,
+                            initialCameraPosition: const CameraPosition(
+                              target: LatLng(
+                                20.5937,
+                                78.9629,
+                              ), // Center of India
+                              zoom: 5,
+                            ),
+                            onMapCreated: (GoogleMapController controller) {
+                              _controller.complete(controller);
+                              // Set map style for better performance (optional)
+                              controller.setMapStyle(null);
+                            },
+                            markers: _markers,
+                            polylines: _polylines,
+                            circles: _circles,
+                            myLocationEnabled: true,
+                            myLocationButtonEnabled: true,
+                            compassEnabled: true,
+                            zoomControlsEnabled: true,
+                            // Performance optimizations
+                            liteModeEnabled: false, // Keep full features
+                            tiltGesturesEnabled:
+                                false, // Disable tilt for better performance
+                            rotateGesturesEnabled:
+                                false, // Disable rotation for better performance
+                            buildingsEnabled:
+                                false, // Disable 3D buildings for faster rendering
+                            trafficEnabled: false, // Disable traffic layer
+                            indoorViewEnabled: false, // Disable indoor maps
+                            // Reduce map rendering updates
+                            onLongPress: _onMapLongPress,
+                            onCameraMove: (CameraPosition position) {
+                              // Store the current camera position
+                              _lastMapPosition = position;
+                            },
+                            // Only update when camera movement is idle
+                            onCameraIdle: () {
+                              // Camera movement finished, can trigger updates if needed
+                            },
+                          ),
+
+                          // Loading indicator
+                          if (state is MapsNavigationLoading)
+                            const Center(child: CircularProgressIndicator()),
+
+                          // Navigation overlay when active
+                          if (state is MapsNavigationActive &&
+                              state.isNavigating)
+                            _buildNavigationOverlay(state),
+                        ],
+                      ),
+                    ),
+                  ],
+                );
+              },
+            ),
+          ),
+          floatingActionButton: FloatingActionButton(
+            onPressed: _getCurrentLocation,
+            backgroundColor: AppColors.primary,
+            foregroundColor: Colors.white,
+            child: const Icon(Icons.my_location),
+          ),
         ),
       ),
     );
@@ -241,7 +296,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
   Widget _buildSearchSection() {
     return Container(
       constraints: BoxConstraints(
-        maxHeight: MediaQuery.of(context).size.height * 0.4, // Limit to 40% of screen
+        maxHeight:
+            MediaQuery.of(context).size.height * 0.4, // Limit to 40% of screen
       ),
       padding: const EdgeInsets.all(16),
       color: Colors.white,
@@ -291,7 +347,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 _addMarker(
                   place.location,
                   place.name,
-                  BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+                  BitmapDescriptor.defaultMarkerWithHue(
+                    BitmapDescriptor.hueRed,
+                  ),
                 );
                 _moveCamera(place.location);
               },
@@ -303,7 +361,11 @@ class _NavigationScreenState extends State<NavigationScreen> {
             SizedBox(
               width: double.infinity,
               child: ElevatedButton(
-                onPressed: _selectedOrigin != null && _selectedDestination != null
+                onPressed:
+                    ((_selectedOrigin != null ||
+                            _originController.text.trim().isNotEmpty) &&
+                        (_selectedDestination != null ||
+                            _destinationController.text.trim().isNotEmpty))
                     ? _getDirections
                     : null,
                 style: ElevatedButton.styleFrom(
@@ -320,6 +382,65 @@ class _NavigationScreenState extends State<NavigationScreen> {
     );
   }
 
+  // Handle long-press to add a location comment
+  void _onMapLongPress(LatLng position) async {
+    final nameController = TextEditingController();
+    final commentController = TextEditingController();
+    // Capture the cubit here so dialog doesn't need to look up the provider
+    final commentsCubit = context.read<LocationCommentsCubit>();
+
+    await showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          title: const Text('Add comment'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(labelText: 'Your name'),
+              ),
+              const SizedBox(height: 8),
+              TextField(
+                controller: commentController,
+                maxLines: 3,
+                decoration: const InputDecoration(labelText: 'Your comment'),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: Colors.white,
+              ),
+              onPressed: () {
+                final name = nameController.text.trim();
+                final comment = commentController.text.trim();
+                if (name.isEmpty || comment.isEmpty) return;
+                commentsCubit.addComment(
+                  position: position,
+                  userName: name,
+                  comment: comment,
+                );
+                Navigator.of(ctx).pop();
+                ScaffoldMessenger.of(
+                  context,
+                ).showSnackBar(const SnackBar(content: Text('Comment added')));
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
   // Build search field with results
   Widget _buildSearchField({
     required TextEditingController controller,
@@ -330,7 +451,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
   }) {
     // Only show location button for origin field
     final bool isOriginField = hint == 'Enter origin';
-    
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -340,11 +461,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
           decoration: InputDecoration(
             hintText: hint,
             prefixIcon: const Icon(Icons.search),
-            suffixIcon: isOriginField ? IconButton(
-              icon: const Icon(Icons.my_location),
-              onPressed: () => _useCurrentLocationAsOrigin(),
-              tooltip: 'Use current location',
-            ) : null,
+            suffixIcon: isOriginField
+                ? IconButton(
+                    icon: const Icon(Icons.my_location),
+                    onPressed: () => _useCurrentLocationAsOrigin(),
+                    tooltip: 'Use current location',
+                  )
+                : null,
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
             contentPadding: const EdgeInsets.symmetric(
               vertical: 12,
@@ -382,10 +505,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
                 final place = results[index];
                 return ListTile(
                   dense: true,
-                  title: Text(
-                    place.name,
-                    style: const TextStyle(fontSize: 14),
-                  ),
+                  title: Text(place.name, style: const TextStyle(fontSize: 14)),
                   subtitle: Text(
                     place.address,
                     maxLines: 1,
@@ -410,10 +530,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
       });
       return;
     }
-    
+
     // Cancel previous debounce timer
     _originSearchDebounce?.cancel();
-    
+
     // Debounce the search to reduce API calls
     _originSearchDebounce = Timer(const Duration(milliseconds: 500), () async {
       // Check connectivity before making network request
@@ -437,13 +557,13 @@ class _NavigationScreenState extends State<NavigationScreen> {
         setState(() {
           _originSearchResults = results;
           _isSearching = false;
-          
+
           // If we have exactly one result, auto-select it
           if (results.length == 1) {
             _selectedOrigin = results.first;
             _originController.text = results.first.name;
             _originSearchResults = []; // Clear search results after selection
-            
+
             // Add marker for the selected origin
             _addMarker(
               results.first.location,
@@ -451,11 +571,15 @@ class _NavigationScreenState extends State<NavigationScreen> {
               BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
             );
             _moveCamera(results.first.location);
-            
+
             // Force UI update to enable Get Directions button if destination is also selected
             if (_selectedDestination != null) {
-              print('[DEBUG] Both origin and destination selected, enabling Get Directions button');
-              setState(() {}); // Explicitly trigger rebuild to update button state
+              print(
+                '[DEBUG] Both origin and destination selected, enabling Get Directions button',
+              );
+              setState(
+                () {},
+              ); // Explicitly trigger rebuild to update button state
             }
           }
         });
@@ -467,7 +591,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
             _isSearching = false;
             _originSearchResults = []; // Clear results on error
           });
-          
+
           // Check if error is related to network connectivity
           if (!_isConnected) {
             _showConnectivityWarning();
@@ -493,7 +617,7 @@ class _NavigationScreenState extends State<NavigationScreen> {
 
     // Cancel previous debounce timer
     _destinationSearchDebounce?.cancel();
-    
+
     // Debounce the search to reduce API calls
     _destinationSearchDebounce = Timer(const Duration(milliseconds: 500), () async {
       setState(() {
@@ -514,8 +638,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
           if (results.length == 1) {
             _selectedDestination = results.first;
             _destinationController.text = results.first.name;
-            _destinationSearchResults = []; // Clear search results after selection
-            
+            _destinationSearchResults =
+                []; // Clear search results after selection
+
             // Add marker for the selected destination
             _addMarker(
               results.first.location,
@@ -523,11 +648,15 @@ class _NavigationScreenState extends State<NavigationScreen> {
               BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
             );
             _moveCamera(results.first.location);
-            
+
             // Force UI update to enable Get Directions button if origin is also selected
             if (_selectedOrigin != null) {
-              print('[DEBUG] Both origin and destination selected, enabling Get Directions button');
-              setState(() {}); // Explicitly trigger rebuild to update button state
+              print(
+                '[DEBUG] Both origin and destination selected, enabling Get Directions button',
+              );
+              setState(
+                () {},
+              ); // Explicitly trigger rebuild to update button state
             }
           }
         });
@@ -550,15 +679,46 @@ class _NavigationScreenState extends State<NavigationScreen> {
   // Get directions between origin and destination
   void _getDirections() {
     print('[DEBUG] _getDirections called');
-    if (_selectedOrigin == null || _selectedDestination == null) {
-      print('[DEBUG] Origin or destination is null');
-      return;
-    }
+    _ensureSelectionsFromText().then((ok) {
+      if (!ok || _selectedOrigin == null || _selectedDestination == null) {
+        print('[DEBUG] Origin or destination is null after ensure');
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Please select valid origin and destination'),
+          ),
+        );
+        return;
+      }
+      context.read<MapsNavigationCubit>().setRoute(
+        _selectedOrigin!.location,
+        _selectedDestination!.location,
+      );
+    });
+  }
 
-    context.read<MapsNavigationCubit>().setRoute(
-      _selectedOrigin!.location,
-      _selectedDestination!.location,
-    );
+  // If user typed text but didn't tap a result, try picking the first place from search
+  Future<bool> _ensureSelectionsFromText() async {
+    bool changed = false;
+    if (_selectedOrigin == null && _originController.text.trim().isNotEmpty) {
+      final res = await context.read<MapsNavigationCubit>().searchPlaces(
+        _originController.text.trim(),
+      );
+      if (res.isNotEmpty) {
+        _selectedOrigin = res.first;
+        changed = true;
+      }
+    }
+    if (_selectedDestination == null &&
+        _destinationController.text.trim().isNotEmpty) {
+      final res = await context.read<MapsNavigationCubit>().searchPlaces(
+        _destinationController.text.trim(),
+      );
+      if (res.isNotEmpty) {
+        _selectedDestination = res.first;
+        changed = true;
+      }
+    }
+    return changed || (_selectedOrigin != null && _selectedDestination != null);
   }
 
   // Update map with route information
@@ -585,10 +745,10 @@ class _NavigationScreenState extends State<NavigationScreen> {
       );
 
       // Add nearby place markers (limit to 10 for performance)
-      final limitedPlaces = state.nearbyPlaces.length > 10 
-          ? state.nearbyPlaces.sublist(0, 10) 
+      final limitedPlaces = state.nearbyPlaces.length > 10
+          ? state.nearbyPlaces.sublist(0, 10)
           : state.nearbyPlaces;
-          
+
       for (final place in limitedPlaces) {
         _addMarker(
           place.location,
@@ -686,39 +846,39 @@ class _NavigationScreenState extends State<NavigationScreen> {
       );
     }
   }
-  
+
   // Use current location as origin
   Future<void> _useCurrentLocationAsOrigin() async {
     print('[DEBUG] _useCurrentLocationAsOrigin called');
     setState(() {
       _isSearching = true;
     });
-    
+
     try {
       // Get current position
       final position = await Geolocator.getCurrentPosition(
         desiredAccuracy: LocationAccuracy.high,
       );
-      
+
       if (!mounted) return;
-      
+
       // Create a place model for current location
       final latLng = LatLng(position.latitude, position.longitude);
-      
+
       // Get address for current location using reverse geocoding
       final results = await context.read<MapsNavigationCubit>().searchPlaces(
         '${position.latitude},${position.longitude}',
       );
-      
+
       String placeName = 'Current Location';
       String placeAddress = 'Your Location';
-      
+
       // If we got results from reverse geocoding, use the first one
       if (results.isNotEmpty) {
         placeName = results.first.name;
         placeAddress = results.first.address;
       }
-      
+
       // Create a place model for current location
       final currentPlace = PlaceModel(
         placeId: 'current_location',
@@ -726,14 +886,14 @@ class _NavigationScreenState extends State<NavigationScreen> {
         address: placeAddress,
         location: latLng,
       );
-      
+
       // Set as selected origin
       setState(() {
         _selectedOrigin = currentPlace;
         _originController.text = placeName;
         _originSearchResults = [];
         _isSearching = false;
-        
+
         // Add marker for current location
         _addMarker(
           latLng,
@@ -741,13 +901,12 @@ class _NavigationScreenState extends State<NavigationScreen> {
           BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
         );
         _moveCamera(latLng);
-        
+
         // Force UI update to enable Get Directions button if destination is also selected
         if (_selectedDestination != null) {
           setState(() {});
         }
       });
-      
     } catch (e) {
       if (!mounted) return;
       print('[DEBUG] Error getting current location: $e');
