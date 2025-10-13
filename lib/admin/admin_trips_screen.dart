@@ -4,7 +4,9 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../core/colors.dart';
 import '../core/models/trip_model.dart';
 import '../cubit/trip_cubit.dart';
-import '../core/repositories/trip_repository.dart';
+import '../core/repositories/user_location_repository.dart';
+import '../core/models/place_model.dart';
+import '../core/services/maps_service.dart';
 
 /// Admin screen to view all trip data from users
 /// This screen provides comprehensive trip management and analytics for administrators
@@ -20,6 +22,8 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
   String _searchQuery = '';
   int _currentTabIndex = 0;
   final List<TripType> _tripTypes = TripType.values;
+  final MapsService _mapsService = MapsService();
+  bool _mapsInitialized = false;
 
   @override
   void initState() {
@@ -28,6 +32,7 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadTrips();
     });
+    _initializeMaps();
   }
 
   void _loadTrips() {
@@ -43,39 +48,39 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-        backgroundColor: AppColors.background,
-        appBar: AppBar(
-          title: const Text(
-            'Admin - Trip Management',
-            style: TextStyle(
-              color: AppColors.appBarText,
-              fontWeight: FontWeight.bold,
-            ),
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        title: const Text(
+          'Admin - Trip Management',
+          style: TextStyle(
+            color: AppColors.appBarText,
+            fontWeight: FontWeight.bold,
           ),
-          backgroundColor: AppColors.appBarBackground,
-          elevation: 0,
-          actions: [
-            IconButton(
-              onPressed: _signOut,
-              icon: const Icon(Icons.logout, color: AppColors.appBarText),
-              tooltip: 'Sign Out',
-            ),
-          ],
         ),
-        body: Column(
-          children: [
-            _buildStatsSection(),
-            _buildTripTypeTabs(),
-            const SizedBox(height: 8),
-            _buildFilterSection(),
-            Expanded(child: _buildTripsList()),
-          ],
-        ),
-        floatingActionButton: FloatingActionButton(
-          onPressed: _refreshTrips,
-          backgroundColor: AppColors.buttonPrimary,
-          child: const Icon(Icons.refresh, color: AppColors.textOnPrimary),
-        ),
+        backgroundColor: AppColors.appBarBackground,
+        elevation: 0,
+        actions: [
+          IconButton(
+            onPressed: _signOut,
+            icon: const Icon(Icons.logout, color: AppColors.appBarText),
+            tooltip: 'Sign Out',
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          _buildStatsSection(),
+          _buildTripTypeTabs(),
+          const SizedBox(height: 8),
+          _buildFilterSection(),
+          Expanded(child: _buildTripsList()),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: _refreshTrips,
+        backgroundColor: AppColors.buttonPrimary,
+        child: const Icon(Icons.refresh, color: AppColors.textOnPrimary),
+      ),
     );
   }
 
@@ -443,7 +448,7 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
     // Determine trip type for styling
     Color typeColor;
     IconData typeIcon;
-    
+
     if (trip.time.isAfter(DateTime.now().add(const Duration(days: 1)))) {
       typeColor = Colors.blue;
       typeIcon = Icons.upcoming;
@@ -506,7 +511,11 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Text(
-                          trip.tripType.toString().split('.').last.toUpperCase(),
+                          trip.tripType
+                              .toString()
+                              .split('.')
+                              .last
+                              .toUpperCase(),
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.bold,
@@ -662,9 +671,14 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
           mainAxisSize: MainAxisSize.min,
           children: [
             _buildDetailRow('Trip Number', trip.tripNumber),
-            _buildDetailRow('Trip Type', trip.tripType.toString().split('.').last.toUpperCase()),
+            _buildDetailRow(
+              'Trip Type',
+              trip.tripType.toString().split('.').last.toUpperCase(),
+            ),
             _buildDetailRow('Origin', trip.origin),
+            _buildPlaceCoordinatesRow('Origin Coords', trip.origin),
             _buildDetailRow('Destination', trip.destination),
+            _buildPlaceCoordinatesRow('Destination Coords', trip.destination),
             _buildDetailRow(
               trip.tripType == TripType.past ? 'Start Time' : 'Time',
               _formatDateTime(trip.time),
@@ -672,7 +686,14 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
             if (trip.tripType == TripType.past && trip.endTime != null)
               _buildDetailRow('End Time', _formatDateTime(trip.endTime!)),
             _buildDetailRow('Mode', trip.mode),
-          //  _buildDetailRow('User ID', trip.userId),
+            const SizedBox(height: 8),
+            const Text(
+              'User Location:',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 4),
+            _buildUserLocationRow(trip.userId),
+            //  _buildDetailRow('User ID', trip.userId),
             _buildDetailRow('Created', _formatDateTime(trip.createdAt)),
             if (trip.activities.isNotEmpty) ...[
               const SizedBox(height: 8),
@@ -725,6 +746,43 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
     );
   }
 
+  Widget _buildUserLocationRow(String userId) {
+    final repo = UserLocationRepository();
+    return FutureBuilder<
+      ({double latitude, double longitude, DateTime? updatedAt})?
+    >(
+      future: repo.getUserLocation(userId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Padding(
+            padding: EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                SizedBox(
+                  height: 16,
+                  width: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                ),
+                SizedBox(width: 8),
+                Text('Fetching location...'),
+              ],
+            ),
+          );
+        }
+        if (!snapshot.hasData || snapshot.data == null) {
+          return const Text('No location available');
+        }
+        final data = snapshot.data!;
+        final lat = data.latitude.toStringAsFixed(6);
+        final lng = data.longitude.toStringAsFixed(6);
+        final updatedAt = data.updatedAt != null
+            ? ' • Updated: ${_formatDateTime(data.updatedAt!)}'
+            : '';
+        return Text('Lat: $lat, Lng: $lng$updatedAt');
+      },
+    );
+  }
+
   void _refreshTrips() {
     _loadTrips();
   }
@@ -738,5 +796,36 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> {
 
   String _formatDateTime(DateTime dateTime) {
     return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour.toString().padLeft(2, '0')}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _initializeMaps() async {
+    if (_mapsInitialized) return;
+    try {
+      await _mapsService.initialize();
+      _mapsInitialized = true;
+    } catch (_) {
+      _mapsInitialized = false;
+    }
+  }
+
+  Widget _buildPlaceCoordinatesRow(String label, String query) {
+    return FutureBuilder<List<PlaceModel>>(
+      future: _mapsInitialized
+          ? _mapsService.searchPlaces(query)
+          : _initializeMaps().then((_) => _mapsService.searchPlaces(query)),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return _buildDetailRow(label, 'Fetching...');
+        }
+        final results = snapshot.data;
+        if (results == null || results.isEmpty) {
+          return _buildDetailRow(label, 'Not available');
+        }
+        final loc = results.first.location;
+        final lat = loc.latitude.toStringAsFixed(6);
+        final lng = loc.longitude.toStringAsFixed(6);
+        return _buildDetailRow(label, 'Lat: $lat, Lng: $lng');
+      },
+    );
   }
 }
