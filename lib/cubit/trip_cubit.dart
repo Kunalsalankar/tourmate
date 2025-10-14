@@ -145,6 +145,42 @@ class TripCubit extends Cubit<TripState> {
   void reset() {
     emit(TripInitial());
   }
+
+  /// End an active trip (mark as past)
+  Future<void> endTrip(String tripId) async {
+    emit(TripLoading());
+    try {
+      final trip = await _tripRepository.getTripById(tripId);
+      if (trip == null) {
+        emit(TripError('Trip not found'));
+        return;
+      }
+
+      // Update trip to past status with current time as end time
+      final updatedTrip = TripModel(
+        id: trip.id,
+        tripNumber: trip.tripNumber,
+        origin: trip.origin,
+        destination: trip.destination,
+        time: trip.time,
+        endTime: DateTime.now(),
+        mode: trip.mode,
+        tripType: TripType.past,
+        activities: trip.activities,
+        accompanyingTravellers: trip.accompanyingTravellers,
+        userId: trip.userId,
+        createdAt: trip.createdAt,
+        updatedAt: DateTime.now(),
+      );
+
+      await _tripRepository.updateTrip(tripId, updatedTrip);
+      emit(TripUpdated());
+      // Refresh the trips list
+      await getUserTrips();
+    } catch (e) {
+      emit(TripError(e.toString()));
+    }
+  }
 }
 
 /// Abstract base class for trip states

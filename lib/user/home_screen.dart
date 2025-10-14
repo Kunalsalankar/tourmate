@@ -482,12 +482,22 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text(
-                            '${trip.origin} to ${trip.destination}',
-                            style: const TextStyle(
-                              fontSize: 16,
-                              fontWeight: FontWeight.bold,
-                            ),
+                          Row(
+                            children: [
+                              Text(
+                                trip.destination == 'Unknown' 
+                                  ? '${trip.origin} → ???'
+                                  : '${trip.origin} → ${trip.destination}',
+                                style: const TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                              if (trip.destination == 'Unknown') ...[
+                                const SizedBox(width: 6),
+                                Icon(Icons.explore, size: 16, color: AppColors.accent),
+                              ],
+                            ],
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -537,6 +547,28 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                   ),
                 ],
               ),
+              // Add End Trip button for active trips
+              if (trip.tripType == TripType.active) ...[
+                const SizedBox(height: 12),
+                const Divider(),
+                const SizedBox(height: 8),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => _endTrip(trip),
+                    icon: const Icon(Icons.stop_circle, size: 18),
+                    label: const Text('End Trip'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.error,
+                      foregroundColor: AppColors.textOnPrimary,
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ],
           ),
         ),
@@ -688,6 +720,238 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             style: ElevatedButton.styleFrom(backgroundColor: AppColors.error),
             child: const Text(
               'Delete',
+              style: TextStyle(color: AppColors.textOnPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _endTrip(TripModel trip) {
+    // Check if this is a random trip (destination is "Unknown")
+    if (trip.destination == 'Unknown') {
+      _endRandomTrip(trip);
+    } else {
+      _endNormalTrip(trip);
+    }
+  }
+
+  void _endNormalTrip(TripModel trip) {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('End Trip'),
+        content: Text(
+          'Are you sure you want to end trip "${trip.tripNumber}"?\n\nThis will mark the trip as completed and set the end time to now.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.of(context).pop();
+              _tripCubit.endTrip(trip.id!);
+              
+              // Show success message
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(Icons.check_circle, color: Colors.white),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Trip "${trip.tripNumber}" has been ended successfully!',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                  backgroundColor: AppColors.success,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.error,
+            ),
+            child: const Text(
+              'End Trip',
+              style: TextStyle(color: AppColors.textOnPrimary),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _endRandomTrip(TripModel trip) {
+    final destinationController = TextEditingController();
+    
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Row(
+          children: [
+            Icon(Icons.explore, color: AppColors.primary),
+            const SizedBox(width: 12),
+            const Text('End Random Trip'),
+          ],
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Where did you end up?',
+              style: TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.bold,
+                color: AppColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Please enter the destination where your trip ended.',
+              style: TextStyle(
+                fontSize: 13,
+                color: AppColors.textSecondary,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: destinationController,
+              autofocus: true,
+              textCapitalization: TextCapitalization.words,
+              decoration: InputDecoration(
+                labelText: 'Final Destination',
+                hintText: 'e.g., Mumbai, Goa, etc.',
+                prefixIcon: const Icon(Icons.location_on, color: AppColors.error),
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(12),
+                  borderSide: const BorderSide(color: AppColors.primary, width: 2),
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: AppColors.accent.withOpacity(0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(color: AppColors.accent.withOpacity(0.3)),
+              ),
+              child: Row(
+                children: [
+                  Icon(Icons.info_outline, color: AppColors.accent, size: 20),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'You can skip this and update it later if needed.',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              // End trip without updating destination
+              Navigator.of(context).pop();
+              _tripCubit.endTrip(trip.id!);
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Trip ended. Destination remains "Unknown".'),
+                  backgroundColor: AppColors.primary,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                ),
+              );
+            },
+            child: const Text('Skip'),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final destination = destinationController.text.trim();
+              
+              if (destination.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(
+                    content: const Text('Please enter a destination or click Skip'),
+                    backgroundColor: AppColors.snackbarWarning,
+                    behavior: SnackBarBehavior.floating,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  ),
+                );
+                return;
+              }
+              
+              Navigator.of(context).pop();
+              
+              // Update trip with destination and end it
+              final updatedTrip = TripModel(
+                id: trip.id,
+                tripNumber: trip.tripNumber,
+                origin: trip.origin,
+                destination: destination,
+                time: trip.time,
+                endTime: DateTime.now(),
+                mode: trip.mode,
+                tripType: TripType.past,
+                activities: trip.activities,
+                accompanyingTravellers: trip.accompanyingTravellers,
+                userId: trip.userId,
+                createdAt: trip.createdAt,
+                updatedAt: DateTime.now(),
+              );
+              
+              _tripCubit.updateTrip(trip.id!, updatedTrip);
+              
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Row(
+                    children: [
+                      const Icon(Icons.check_circle, color: Colors.white),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Trip ended at $destination!',
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                    ],
+                  ),
+                  backgroundColor: AppColors.success,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                  duration: const Duration(seconds: 3),
+                ),
+              );
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppColors.primary,
+            ),
+            child: const Text(
+              'End Trip',
               style: TextStyle(color: AppColors.textOnPrimary),
             ),
           ),
