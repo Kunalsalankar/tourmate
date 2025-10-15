@@ -2,9 +2,11 @@ import 'dart:async';
 import 'package:bloc/bloc.dart';
 import 'package:equatable/equatable.dart';
 import 'package:flutter/foundation.dart';
+import 'package:geocoding/geocoding.dart';
 import '../core/models/auto_trip_model.dart';
 import '../core/services/trip_detection_service.dart';
 import '../core/repositories/auto_trip_repository.dart';
+import '../core/services/notification_service.dart';
 
 // States
 abstract class TripDetectionState extends Equatable {
@@ -60,6 +62,7 @@ class TripDetectionLoading extends TripDetectionState {}
 class TripDetectionCubit extends Cubit<TripDetectionState> {
   final TripDetectionService _detectionService;
   final AutoTripRepository _repository;
+  final NotificationService _notificationService;
 
   StreamSubscription<AutoTripModel>? _tripStartSubscription;
   StreamSubscription<AutoTripModel>? _tripEndSubscription;
@@ -72,8 +75,10 @@ class TripDetectionCubit extends Cubit<TripDetectionState> {
   TripDetectionCubit({
     TripDetectionService? detectionService,
     AutoTripRepository? repository,
+    NotificationService? notificationService,
   })  : _detectionService = detectionService ?? TripDetectionService(),
         _repository = repository ?? AutoTripRepository(),
+        _notificationService = notificationService ?? NotificationService(),
         super(TripDetectionInitial());
 
   /// Start automatic trip detection
@@ -135,11 +140,32 @@ class TripDetectionCubit extends Cubit<TripDetectionState> {
   }
 
   /// Handle trip start event
-  void _handleTripStart(AutoTripModel trip) {
+  void _handleTripStart(AutoTripModel trip) async {
     if (kDebugMode) {
       print('[TripDetectionCubit] Trip started: ${trip.origin.coordinates}');
     }
     emit(TripDetectionActive(currentTrip: trip));
+    
+    // Show notification for trip start
+    try {
+      final locationName = await _getLocationName(
+        trip.origin.coordinates.latitude,
+        trip.origin.coordinates.longitude,
+      );
+      
+      await _notificationService.showTripDetectedNotification(
+        mode: trip.detectedMode ?? 'Unknown',
+        origin: locationName,
+      );
+      
+      if (kDebugMode) {
+        print('[TripDetectionCubit] Trip start notification sent');
+      }
+    } catch (e) {
+      if (kDebugMode) {
+        print('[TripDetectionCubit] Error sending trip start notification: $e');
+      }
+    }
   }
 
   /// Handle trip update event
@@ -161,6 +187,29 @@ class TripDetectionCubit extends Cubit<TripDetectionState> {
 
         if (kDebugMode) {
           print('[TripDetectionCubit] Trip saved: $tripId');
+        }
+        
+        // Show notification for trip end
+        try {
+          final locationName = await _getLocationName(
+            trip.destination?.coordinates.latitude ?? trip.origin.coordinates.latitude,
+            trip.destination?.coordinates.longitude ?? trip.origin.coordinates.longitude,
+          );
+          
+          await _notificationService.showTripEndedNotification(
+            mode: trip.detectedMode ?? 'Unknown',
+            destination: locationName,
+            distanceKm: trip.distanceKm,
+            durationMinutes: trip.durationMinutes,
+          );
+          
+          if (kDebugMode) {
+            print('[TripDetectionCubit] Trip end notification sent');
+          }
+        } catch (e) {
+          if (kDebugMode) {
+            print('[TripDetectionCubit] Error sending trip end notification: $e');
+          }
         }
 
         // Return to active detection after a delay
@@ -263,6 +312,42 @@ class TripDetectionCubit extends Cubit<TripDetectionState> {
 
   /// Get current trip
   AutoTripModel? get currentTrip => _detectionService.currentTrip;
+
+  /// Get location name from coordinates using reverse geocoding
+  Future<String> _getLocationName(double latitude, double longitude) async {
+    try {
+      final placemarks = await placemarkFromCoordinates(latitude, longitude);
+      
+      if (placemarks.isNotEmpty) {
+        final placemark = placemarks.first;
+        
+        // Build location string from available data
+        final parts = <String>[];
+        
+        if (placemark.locality != null && placemark.locality!.isNotEmpty) {
+          parts.add(placemark.locality!);
+        }
+        if (placemark.subLocality != null && placemark.subLocality!.isNotEmpty) {
+          parts.add(placemark.subLocality!);
+        }
+        if (placemark.administrativeArea != null && placemark.administrativeArea!.isNotEmpty) {
+          parts.add(placemark.administrativeArea!);
+        }
+        
+        if (parts.isNotEmpty) {
+          return parts.take(2).join(', '); // Return first 2 parts
+        }
+      }
+      
+      // Fallback to coordinates
+      return '${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}';
+    } catch (e) {
+      if (kDebugMode) {
+        print('[TripDetectionCubit] Error getting location name: $e');
+      }
+      return '${latitude.toStringAsFixed(4)}, ${longitude.toStringAsFixed(4)}';
+    }
+  }
 
   @override
   Future<void> close() {

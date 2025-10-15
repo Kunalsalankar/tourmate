@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../core/colors.dart';
 import '../core/models/auto_trip_model.dart';
+import '../core/services/location_service.dart';
 import '../cubit/trip_detection_cubit.dart';
+import '../widgets/add_comment_dialog.dart';
 import 'trip_confirmation_screen.dart';
 
 /// Screen for managing automatic trip detection
@@ -232,6 +235,24 @@ class _TripDetectionScreenState extends State<TripDetectionScreen> {
                 'Detected Mode',
                 trip.detectedMode!,
               ),
+            const SizedBox(height: 12),
+            // Add Comment Button
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: () => _addComment(trip),
+                icon: const Icon(Icons.add_comment, size: 18),
+                label: const Text('Add Comment'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.accent,
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+              ),
+            ),
           ],
         ),
       ),
@@ -376,6 +397,64 @@ class _TripDetectionScreenState extends State<TripDetectionScreen> {
         ),
       ),
     );
+  }
+
+  // Add comment during active trip
+  Future<void> _addComment(AutoTripModel trip) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // Get current location
+      final locationService = LocationService();
+      await locationService.initialize();
+      final position = await locationService.getCurrentPosition();
+      
+      if (position == null) {
+        throw Exception('Unable to get current location');
+      }
+      
+      final currentLocation = LatLng(position.latitude, position.longitude);
+
+      if (!mounted) return;
+
+      // Show comment dialog
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (context) => AddCommentDialog(
+          currentLocation: currentLocation,
+          userId: user.uid,
+          userName: user.displayName ?? user.email ?? 'User',
+          tripId: trip.id,
+        ),
+      );
+
+      // Show success message if comment was added
+      if (result == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Comment added to your journey!'),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error adding comment: $e'),
+            backgroundColor: AppColors.error,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildInfoItem(String number, String text) {

@@ -94,7 +94,7 @@ class NotificationService {
       payload: place.placeId,
     );
   }
-  
+
   /// Show a notification for route deviation
   Future<void> showRouteDeviationNotification() async {
     // Android notification details
@@ -128,6 +128,164 @@ class NotificationService {
       'Route Deviation',
       'You have deviated from the planned route. Tap to recalculate.',
       platformChannelSpecifics,
+    );
+  }
+
+  /// Show a notification when a new trip is detected
+  Future<void> showTripDetectedNotification({
+    required String mode,
+    required String origin,
+  }) async {
+    // Android notification details with custom sound and vibration
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'trip_detection_channel',
+      'Trip Detection',
+      channelDescription: 'Notifications for automatic trip detection',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+      enableVibration: true,
+      playSound: true,
+      icon: '@mipmap/ic_launcher',
+      styleInformation: BigTextStyleInformation(''),
+    );
+
+    // iOS notification details
+    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+        DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+
+    // Notification details for all platforms
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+      iOS: iOSPlatformChannelSpecifics,
+    );
+
+    // Show the notification
+    await _flutterLocalNotificationsPlugin.show(
+      _getNextNotificationId(),
+      ' New Trip Detected!',
+      'Started $mode from $origin. Tracking your journey...',
+      platformChannelSpecifics,
+      payload: 'trip_started',
+    );
+  }
+
+  /// Show a notification when a trip ends
+  Future<void> showTripEndedNotification({
+    required String mode,
+    required String destination,
+    required double distanceKm,
+    required int durationMinutes,
+  }) async {
+    // Format duration
+    String durationText;
+    if (durationMinutes < 60) {
+      durationText = '$durationMinutes min';
+    } else {
+      final hours = durationMinutes ~/ 60;
+      final mins = durationMinutes % 60;
+      durationText = '${hours}h ${mins}min';
+    }
+
+    // Android notification details
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'trip_detection_channel',
+      'Trip Detection',
+      channelDescription: 'Notifications for automatic trip detection',
+      importance: Importance.high,
+      priority: Priority.high,
+      showWhen: true,
+      enableVibration: true,
+      playSound: true,
+      icon: '@mipmap/ic_launcher',
+      styleInformation: BigTextStyleInformation(''),
+    );
+
+    // iOS notification details
+    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+        DarwinNotificationDetails(
+      presentAlert: true,
+      presentBadge: true,
+      presentSound: true,
+      interruptionLevel: InterruptionLevel.timeSensitive,
+    );
+
+    // Notification details for all platforms
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+      iOS: iOSPlatformChannelSpecifics,
+    );
+
+    // Show the notification
+    await _flutterLocalNotificationsPlugin.show(
+      _getNextNotificationId(),
+      ' Trip Completed!',
+      '$mode trip ended at $destination. ${distanceKm.toStringAsFixed(2)}km in $durationText',
+      platformChannelSpecifics,
+      payload: 'trip_ended',
+    );
+  }
+
+  /// Show a notification for trip update (optional, for long trips)
+  Future<void> showTripUpdateNotification({
+    required String mode,
+    required double distanceKm,
+    required int durationMinutes,
+  }) async {
+    // Format duration
+    String durationText;
+    if (durationMinutes < 60) {
+      durationText = '$durationMinutes min';
+    } else {
+      final hours = durationMinutes ~/ 60;
+      final mins = durationMinutes % 60;
+      durationText = '${hours}h ${mins}min';
+    }
+
+    // Android notification details (low priority for updates)
+    const AndroidNotificationDetails androidPlatformChannelSpecifics =
+        AndroidNotificationDetails(
+      'trip_updates_channel',
+      'Trip Updates',
+      channelDescription: 'Ongoing trip progress updates',
+      importance: Importance.low,
+      priority: Priority.low,
+      showWhen: true,
+      enableVibration: false,
+      playSound: false,
+      ongoing: true,
+      icon: '@mipmap/ic_launcher',
+      styleInformation: BigTextStyleInformation(''),
+    );
+
+    // iOS notification details
+    const DarwinNotificationDetails iOSPlatformChannelSpecifics =
+        DarwinNotificationDetails(
+      presentAlert: false,
+      presentBadge: false,
+      presentSound: false,
+    );
+
+    // Notification details for all platforms
+    const NotificationDetails platformChannelSpecifics = NotificationDetails(
+      android: androidPlatformChannelSpecifics,
+      iOS: iOSPlatformChannelSpecifics,
+    );
+
+    // Show the notification
+    await _flutterLocalNotificationsPlugin.show(
+      0, // Use fixed ID so it updates the same notification
+      ' Trip in Progress',
+      '$mode • ${distanceKm.toStringAsFixed(2)}km • $durationText',
+      platformChannelSpecifics,
+      payload: 'trip_update',
     );
   }
 

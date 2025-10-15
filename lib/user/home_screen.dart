@@ -4,11 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:overlay_support/overlay_support.dart';
+import 'package:google_maps_flutter/google_maps_flutter.dart';
 import '../core/colors.dart';
 import '../core/models/trip_model.dart';
+import '../core/models/location_comment_model.dart';
+import '../core/services/location_service.dart';
+import '../core/repositories/location_comment_repository.dart';
 import '../cubit/trip_cubit.dart';
 import '../core/repositories/trip_repository.dart';
 import '../widgets/trip_form_widget.dart';
+import '../widgets/add_comment_dialog.dart';
 import '../cubit/bottom_nav_cubit.dart';
 import '../cubit/notification_cubit.dart';
 
@@ -547,26 +552,45 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                   ),
                 ],
               ),
-              // Add End Trip button for active trips
+              // Add Comment and End Trip buttons for active trips
               if (trip.tripType == TripType.active) ...[
                 const SizedBox(height: 12),
                 const Divider(),
                 const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () => _endTrip(trip),
-                    icon: const Icon(Icons.stop_circle, size: 18),
-                    label: const Text('End Trip'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.error,
-                      foregroundColor: AppColors.textOnPrimary,
-                      padding: const EdgeInsets.symmetric(vertical: 8),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _addCommentToTrip(trip),
+                        icon: const Icon(Icons.add_comment, size: 18),
+                        label: const Text('Add Comment'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.accent,
+                          foregroundColor: AppColors.textOnPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
                       ),
                     ),
-                  ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () => _endTrip(trip),
+                        icon: const Icon(Icons.stop_circle, size: 18),
+                        label: const Text('End Trip'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.error,
+                          foregroundColor: AppColors.textOnPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
               ],
             ],
@@ -598,63 +622,305 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   Widget _buildTripDetailsDialog(TripModel trip) {
-    return AlertDialog(
-      title: Text(trip.tripNumber),
-      content: SingleChildScrollView(
+    final user = FirebaseAuth.instance.currentUser;
+    
+    return Dialog(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 500, maxHeight: 700),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            _buildDetailRow('Origin', trip.origin),
-            _buildDetailRow('Destination', trip.destination),
-            _buildDetailRow(
-              trip.tripType == TripType.past ? 'Start Time' : 'Time',
-              _formatDateTime(trip.time),
+            // Header with gradient
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: AppColors.primaryGradient,
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(10),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(
+                      _getTripIcon(trip.mode),
+                      color: Colors.white,
+                      size: 28,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          trip.tripNumber,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        Text(
+                          trip.mode,
+                          style: TextStyle(
+                            color: Colors.white.withValues(alpha: 0.9),
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(trip.tripType),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      _getStatusText(trip.tripType),
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-            if (trip.tripType == TripType.past && trip.endTime != null)
-              _buildDetailRow('End Time', _formatDateTime(trip.endTime!)),
-            _buildDetailRow('Mode', trip.mode),
-            if (trip.activities.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Activities:',
-                style: TextStyle(fontWeight: FontWeight.bold),
+            
+            // Content
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(20),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Route Section
+                    _buildSectionTitle('Route Details', Icons.route),
+                    const SizedBox(height: 12),
+                    _buildEnhancedDetailRow(
+                      Icons.trip_origin,
+                      'Origin',
+                      trip.origin,
+                      AppColors.success,
+                    ),
+                    const SizedBox(height: 8),
+                    _buildEnhancedDetailRow(
+                      Icons.location_on,
+                      'Destination',
+                      trip.destination,
+                      AppColors.error,
+                    ),
+                    
+                    const SizedBox(height: 20),
+                    const Divider(),
+                    const SizedBox(height: 20),
+                    
+                    // Time Section
+                    _buildSectionTitle('Time Details', Icons.schedule),
+                    const SizedBox(height: 12),
+                    _buildEnhancedDetailRow(
+                      Icons.access_time,
+                      trip.tripType == TripType.past ? 'Start Time' : 'Time',
+                      _formatDateTime(trip.time),
+                      AppColors.primary,
+                    ),
+                    if (trip.tripType == TripType.past && trip.endTime != null) ...[
+                      const SizedBox(height: 8),
+                      _buildEnhancedDetailRow(
+                        Icons.event_available,
+                        'End Time',
+                        _formatDateTime(trip.endTime!),
+                        AppColors.primary,
+                      ),
+                      const SizedBox(height: 8),
+                      _buildEnhancedDetailRow(
+                        Icons.timer,
+                        'Duration',
+                        _calculateDuration(trip.time, trip.endTime!),
+                        AppColors.accent,
+                      ),
+                    ],
+                    
+                    // Activities Section
+                    if (trip.activities.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      const Divider(),
+                      const SizedBox(height: 20),
+                      _buildSectionTitle('Activities', Icons.local_activity),
+                      const SizedBox(height: 12),
+                      Wrap(
+                        spacing: 8,
+                        runSpacing: 8,
+                        children: trip.activities.map((activity) {
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.primary.withValues(alpha: 0.1),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                color: AppColors.primary.withValues(alpha: 0.3),
+                              ),
+                            ),
+                            child: Text(
+                              activity,
+                              style: const TextStyle(
+                                color: AppColors.primary,
+                                fontSize: 13,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          );
+                        }).toList(),
+                      ),
+                    ],
+                    
+                    // Travellers Section
+                    if (trip.accompanyingTravellers.isNotEmpty) ...[
+                      const SizedBox(height: 20),
+                      const Divider(),
+                      const SizedBox(height: 20),
+                      _buildSectionTitle('Travellers', Icons.people),
+                      const SizedBox(height: 12),
+                      ...trip.accompanyingTravellers.map((traveller) {
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 8),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[50],
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey[200]!),
+                          ),
+                          child: Row(
+                            children: [
+                              CircleAvatar(
+                                radius: 20,
+                                backgroundColor: AppColors.accent.withValues(alpha: 0.2),
+                                child: Text(
+                                  traveller.name[0].toUpperCase(),
+                                  style: const TextStyle(
+                                    color: AppColors.accent,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      traveller.name,
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 14,
+                                      ),
+                                    ),
+                                    Text(
+                                      '${traveller.age} years old',
+                                      style: TextStyle(
+                                        color: Colors.grey[600],
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      }),
+                    ],
+                    
+                    // Comments Section
+                    if (trip.id != null && user != null) ...[
+                      const SizedBox(height: 20),
+                      const Divider(),
+                      const SizedBox(height: 20),
+                      _buildSectionTitle('Journey Comments', Icons.comment),
+                      const SizedBox(height: 12),
+                      _buildCommentsSection(trip.id!, user.uid),
+                    ],
+                  ],
+                ),
               ),
-              ...trip.activities.map((activity) => Text('• $activity')),
-            ],
-            if (trip.accompanyingTravellers.isNotEmpty) ...[
-              const SizedBox(height: 8),
-              const Text(
-                'Travellers:',
-                style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            
+            // Action Buttons
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.grey[50],
+                borderRadius: const BorderRadius.only(
+                  bottomLeft: Radius.circular(16),
+                  bottomRight: Radius.circular(16),
+                ),
               ),
-              ...trip.accompanyingTravellers.map(
-                (traveller) =>
-                    Text('• ${traveller.name} (${traveller.age} years old)'),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        side: BorderSide(color: Colors.grey[300]!),
+                      ),
+                      child: const Text(
+                        'Close',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () {
+                        Navigator.of(context).pop();
+                        _editTrip(trip);
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.buttonPrimary,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 12),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: const Text(
+                        'Edit',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ],
         ),
       ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child: const Text('Close'),
-        ),
-        ElevatedButton(
-          onPressed: () {
-            Navigator.of(context).pop();
-            _editTrip(trip);
-          },
-          style: ElevatedButton.styleFrom(
-            backgroundColor: AppColors.buttonPrimary,
-          ),
-          child: const Text(
-            'Edit',
-            style: TextStyle(color: AppColors.textOnPrimary),
-          ),
-        ),
-      ],
     );
   }
 
@@ -726,6 +992,85 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
         ],
       ),
     );
+  }
+
+  // Add comment to active trip
+  Future<void> _addCommentToTrip(TripModel trip) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    try {
+      // Get current location
+      final locationService = LocationService();
+      await locationService.initialize();
+      final position = await locationService.getCurrentPosition();
+      
+      if (position == null) {
+        throw Exception('Unable to get current location. Please enable GPS.');
+      }
+      
+      final currentLocation = LatLng(position.latitude, position.longitude);
+
+      if (!mounted) return;
+
+      // Show comment dialog
+      final result = await showDialog<bool>(
+        context: context,
+        builder: (context) => AddCommentDialog(
+          currentLocation: currentLocation,
+          userId: user.uid,
+          userName: user.displayName ?? user.email ?? 'User',
+          tripId: trip.id,
+        ),
+      );
+
+      // Show success message if comment was added
+      if (result == true && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Comment added to "${trip.tripNumber}"!',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Error: ${e.toString()}',
+                    style: const TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    }
   }
 
   void _endTrip(TripModel trip) {
@@ -958,6 +1303,434 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
         ],
       ),
     );
+  }
+
+  // Helper method to get trip icon based on mode
+  IconData _getTripIcon(String mode) {
+    switch (mode.toLowerCase()) {
+      case 'car':
+        return Icons.directions_car;
+      case 'bike':
+      case 'bicycle':
+        return Icons.directions_bike;
+      case 'bus':
+        return Icons.directions_bus;
+      case 'train':
+        return Icons.train;
+      case 'flight':
+      case 'airplane':
+        return Icons.flight;
+      case 'walking':
+        return Icons.directions_walk;
+      default:
+        return Icons.trip_origin;
+    }
+  }
+
+  // Helper method to get status color
+  Color _getStatusColor(TripType tripType) {
+    switch (tripType) {
+      case TripType.active:
+        return Colors.green;
+      case TripType.future:
+        return Colors.orange;
+      case TripType.past:
+        return Colors.grey;
+    }
+  }
+
+  // Helper method to get status text
+  String _getStatusText(TripType tripType) {
+    switch (tripType) {
+      case TripType.active:
+        return 'ACTIVE';
+      case TripType.future:
+        return 'UPCOMING';
+      case TripType.past:
+        return 'COMPLETED';
+    }
+  }
+
+  // Build section title widget
+  Widget _buildSectionTitle(String title, IconData icon) {
+    return Row(
+      children: [
+        Icon(icon, size: 20, color: AppColors.primary),
+        const SizedBox(width: 8),
+        Text(
+          title,
+          style: const TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+            color: AppColors.primary,
+          ),
+        ),
+      ],
+    );
+  }
+
+  // Build enhanced detail row with icon
+  Widget _buildEnhancedDetailRow(
+    IconData icon,
+    String label,
+    String value,
+    Color iconColor,
+  ) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.grey[50],
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.grey[200]!),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(8),
+            decoration: BoxDecoration(
+              color: iconColor.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, size: 20, color: iconColor),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: const TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // Calculate duration between two dates
+  String _calculateDuration(DateTime start, DateTime end) {
+    final duration = end.difference(start);
+    final hours = duration.inHours;
+    final minutes = duration.inMinutes.remainder(60);
+    
+    if (hours > 0) {
+      return '$hours hr ${minutes} min';
+    } else {
+      return '$minutes min';
+    }
+  }
+
+  // Build comments section
+  Widget _buildCommentsSection(String tripId, String currentUserId) {
+    return StreamBuilder<List<LocationCommentModel>>(
+      stream: LocationCommentRepository().getTripComments(tripId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return const Center(
+            child: Padding(
+              padding: EdgeInsets.all(20),
+              child: CircularProgressIndicator(),
+            ),
+          );
+        }
+
+        if (snapshot.hasError) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.error.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, color: AppColors.error),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Text(
+                    'Error loading comments: ${snapshot.error}',
+                    style: const TextStyle(color: AppColors.error),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        final comments = snapshot.data ?? [];
+
+        if (comments.isEmpty) {
+          return Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: Colors.grey[50],
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: Colors.grey[200]!),
+            ),
+            child: Column(
+              children: [
+                Icon(
+                  Icons.comment_outlined,
+                  size: 48,
+                  color: Colors.grey[400],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  'No comments yet',
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey[600],
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Add comments during your journey',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey[500],
+                  ),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return Column(
+          children: comments.map((comment) {
+            final isOwner = comment.uid == currentUserId;
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isOwner 
+                    ? AppColors.primary.withValues(alpha: 0.05)
+                    : Colors.grey[50],
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                  color: isOwner 
+                      ? AppColors.primary.withValues(alpha: 0.2)
+                      : Colors.grey[200]!,
+                ),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 16,
+                        backgroundColor: isOwner
+                            ? AppColors.primary.withValues(alpha: 0.2)
+                            : AppColors.accent.withValues(alpha: 0.2),
+                        child: Text(
+                          comment.userName.isNotEmpty
+                              ? comment.userName[0].toUpperCase()
+                              : 'U',
+                          style: TextStyle(
+                            color: isOwner ? AppColors.primary : AppColors.accent,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Row(
+                              children: [
+                                Text(
+                                  comment.userName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                                if (isOwner) ...[
+                                  const SizedBox(width: 6),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 6,
+                                      vertical: 2,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: AppColors.primary,
+                                      borderRadius: BorderRadius.circular(10),
+                                    ),
+                                    child: const Text(
+                                      'You',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 9,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              ],
+                            ),
+                            Text(
+                              _formatCommentTime(comment.timestamp),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Colors.grey[600],
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      if (isOwner)
+                        IconButton(
+                          icon: const Icon(Icons.delete_outline, size: 18),
+                          color: Colors.grey[600],
+                          onPressed: () => _deleteComment(comment),
+                          padding: EdgeInsets.zero,
+                          constraints: const BoxConstraints(),
+                        ),
+                    ],
+                  ),
+                  
+                  // Tags
+                  if (comment.tags != null && comment.tags!.isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 6,
+                      runSpacing: 6,
+                      children: comment.tags!.map((tag) {
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 3,
+                          ),
+                          decoration: BoxDecoration(
+                            color: AppColors.accent.withValues(alpha: 0.1),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            tag,
+                            style: const TextStyle(
+                              fontSize: 10,
+                              color: AppColors.accent,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
+                        );
+                      }).toList(),
+                    ),
+                  ],
+                  
+                  // Comment text
+                  const SizedBox(height: 8),
+                  Text(
+                    comment.comment,
+                    style: const TextStyle(
+                      fontSize: 13,
+                      height: 1.4,
+                    ),
+                  ),
+                  
+                  // Location
+                  const SizedBox(height: 8),
+                  Row(
+                    children: [
+                      Icon(
+                        Icons.location_on,
+                        size: 12,
+                        color: Colors.grey[500],
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${comment.lat.toStringAsFixed(4)}, ${comment.lng.toStringAsFixed(4)}',
+                        style: TextStyle(
+                          fontSize: 10,
+                          color: Colors.grey[600],
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+        );
+      },
+    );
+  }
+
+  // Format comment timestamp
+  String _formatCommentTime(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      return '${months[timestamp.month - 1]} ${timestamp.day}';
+    }
+  }
+
+  // Delete comment
+  Future<void> _deleteComment(LocationCommentModel comment) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Comment'),
+        content: const Text('Are you sure you want to delete this comment?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && comment.id != null) {
+      final repository = LocationCommentRepository();
+      final success = await repository.deleteComment(comment.id!);
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              success ? 'Comment deleted successfully' : 'Failed to delete comment',
+            ),
+            backgroundColor: success ? AppColors.success : AppColors.error,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+          ),
+        );
+      }
+    }
   }
 
   void _signOut() async {

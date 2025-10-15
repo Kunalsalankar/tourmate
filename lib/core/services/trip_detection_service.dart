@@ -16,7 +16,7 @@ class TripDetectionConfig {
   static const double significantMovementDistance = 50.0; // Distance to confirm movement
   
   // Time thresholds (in seconds)
-  static const int movementConfirmationDuration = 180; // 3 minutes of movement to start trip
+  static const int movementConfirmationDuration = 60; // 1 minutes of movement to start trip
   static const int stationaryConfirmationDuration = 300; // 5 minutes stationary to end trip
   static const int locationUpdateInterval = 30; // Update location every 30 seconds
   
