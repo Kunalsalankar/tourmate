@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'dart:async';
 import '../../core/colors.dart';
 import '../../core/models/trip_model.dart';
 import '../../cubit/trip_cubit.dart';
+import '../core/services/places_autocomplete_service.dart';
 
 /// Production-ready widget for creating and editing trips
 /// Features:
@@ -64,17 +66,14 @@ class _TripFormWidgetState extends State<TripFormWidget> with SingleTickerProvid
     'Other',
   ];
   
-  // Common destinations for autocomplete (can be loaded from API)
-  final List<String> _popularDestinations = [
-    'Mumbai',
-    'Delhi',
-    'Bangalore',
-    'Kolkata',
-    'Chennai',
-    'Hyderabad',
-    'Pune',
-    'Ahmedabad',
-  ];
+  // Places autocomplete service
+  final PlacesAutocompleteService _placesService = PlacesAutocompleteService();
+  
+  // Debounce timer for autocomplete
+  Timer? _debounceTimer;
+  
+  // Session token for Places API (to reduce costs)
+  String? _sessionToken;
 
   @override
   void initState() {
@@ -94,6 +93,9 @@ class _TripFormWidgetState extends State<TripFormWidget> with SingleTickerProvid
     // Start animation
     _animationController.forward();
     
+    // Initialize Places API service
+    _initializePlacesService();
+    
     // Initialize form if editing
     if (widget.trip != null) {
       _initializeForm();
@@ -104,6 +106,23 @@ class _TripFormWidgetState extends State<TripFormWidget> with SingleTickerProvid
     _originController.addListener(_onFormChanged);
     _destinationController.addListener(_onFormChanged);
     _modeController.addListener(_onFormChanged);
+  }
+  
+  Future<void> _initializePlacesService() async {
+    try {
+      await _placesService.initialize();
+      // Generate a session token for this form session
+      _sessionToken = DateTime.now().millisecondsSinceEpoch.toString();
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Warning: Places autocomplete may not work properly'),
+            backgroundColor: AppColors.warning,
+          ),
+        );
+      }
+    }
   }
   
   void _onFormChanged() {
@@ -144,6 +163,9 @@ class _TripFormWidgetState extends State<TripFormWidget> with SingleTickerProvid
     
     // Dispose animation controller
     _animationController.dispose();
+    
+    // Cancel debounce timer
+    _debounceTimer?.cancel();
     
     super.dispose();
   }
@@ -451,17 +473,29 @@ class _TripFormWidgetState extends State<TripFormWidget> with SingleTickerProvid
   }
 
   Widget _buildOriginField() {
-    return Autocomplete<String>(
-      optionsBuilder: (TextEditingValue textEditingValue) {
-        if (textEditingValue.text.isEmpty) {
-          return const Iterable<String>.empty();
+    return Autocomplete<PlaceAutocompletePrediction>(
+      optionsBuilder: (TextEditingValue textEditingValue) async {
+        if (textEditingValue.text.isEmpty || textEditingValue.text.length < 2) {
+          return const Iterable<PlaceAutocompletePrediction>.empty();
         }
-        return _popularDestinations.where((String option) {
-          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+        
+        // Use debouncing to avoid too many API calls
+        _debounceTimer?.cancel();
+        final completer = Completer<List<PlaceAutocompletePrediction>>();
+        
+        _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
+          final suggestions = await _placesService.getAutocompleteSuggestions(
+            textEditingValue.text,
+            sessionToken: _sessionToken,
+          );
+          completer.complete(suggestions);
         });
+        
+        return completer.future;
       },
-      onSelected: (String selection) {
-        _originController.text = selection;
+      displayStringForOption: (PlaceAutocompletePrediction option) => option.description,
+      onSelected: (PlaceAutocompletePrediction selection) {
+        _originController.text = selection.description;
       },
       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
         // Sync with our controller
@@ -614,17 +648,29 @@ class _TripFormWidgetState extends State<TripFormWidget> with SingleTickerProvid
   }
 
   Widget _buildDestinationField() {
-    return Autocomplete<String>(
-      optionsBuilder: (TextEditingValue textEditingValue) {
-        if (textEditingValue.text.isEmpty) {
-          return const Iterable<String>.empty();
+    return Autocomplete<PlaceAutocompletePrediction>(
+      optionsBuilder: (TextEditingValue textEditingValue) async {
+        if (textEditingValue.text.isEmpty || textEditingValue.text.length < 2) {
+          return const Iterable<PlaceAutocompletePrediction>.empty();
         }
-        return _popularDestinations.where((String option) {
-          return option.toLowerCase().contains(textEditingValue.text.toLowerCase());
+        
+        // Use debouncing to avoid too many API calls
+        _debounceTimer?.cancel();
+        final completer = Completer<List<PlaceAutocompletePrediction>>();
+        
+        _debounceTimer = Timer(const Duration(milliseconds: 500), () async {
+          final suggestions = await _placesService.getAutocompleteSuggestions(
+            textEditingValue.text,
+            sessionToken: _sessionToken,
+          );
+          completer.complete(suggestions);
         });
+        
+        return completer.future;
       },
-      onSelected: (String selection) {
-        _destinationController.text = selection;
+      displayStringForOption: (PlaceAutocompletePrediction option) => option.description,
+      onSelected: (PlaceAutocompletePrediction selection) {
+        _destinationController.text = selection.description;
       },
       fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
         // Sync with our controller

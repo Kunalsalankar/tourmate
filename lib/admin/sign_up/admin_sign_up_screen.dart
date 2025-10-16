@@ -233,7 +233,7 @@ class _AdminSignUpScreenState extends State<AdminSignUpScreen> {
                                     ? null
                                     : () {
                                         if (_formKey.currentState!.validate()) {
-                                          context.read<AuthCubit>().signUp(
+                                          context.read<AuthCubit>().signUpAdmin(
                                             _emailController.text.trim(),
                                             _passwordController.text.trim(),
                                           );

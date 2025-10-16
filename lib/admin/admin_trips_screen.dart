@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../core/colors.dart';
 import '../core/models/trip_model.dart';
+import '../core/models/location_comment_model.dart';
 import '../cubit/trip_cubit.dart';
 import '../core/repositories/trip_repository.dart';
+import '../core/repositories/location_comment_repository.dart';
 
 /// Production-ready Admin screen for comprehensive trip management
 /// Features:
@@ -1229,6 +1232,12 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
                         ).toList(),
                       ),
                     ],
+                    // User Information Section
+                    const SizedBox(height: 16),
+                    _buildUserInfoSection(trip.userId),
+                    // Journey Comments Section
+                    const SizedBox(height: 16),
+                    _buildCommentsSection(trip.id),
                   ],
                 ),
               ),
@@ -1288,6 +1297,330 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
         ],
       ),
     );
+  }
+
+  Widget _buildUserInfoSection(String userId) {
+    return FutureBuilder<Map<String, String>>(
+      future: _fetchUserInfo(userId),
+      builder: (context, snapshot) {
+        if (snapshot.connectionState == ConnectionState.waiting) {
+          return Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.surface,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: const Center(
+              child: Padding(
+                padding: EdgeInsets.all(16),
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          );
+        }
+
+        final userInfo = snapshot.data ?? {'email': 'Unknown User', 'name': 'N/A'};
+        final userEmail = userInfo['email']!;
+        final userName = userInfo['name']!;
+
+        return Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Icon(Icons.person, size: 20, color: AppColors.primary),
+                  const SizedBox(width: 8),
+                  
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                    child: Text(
+                      userEmail.isNotEmpty ? userEmail[0].toUpperCase() : 'U',
+                      style: const TextStyle(
+                        color: AppColors.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 20,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        if (userName != 'N/A')
+                          Text(
+                            userName,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 14,
+                            ),
+                          ),
+                        Text(
+                          userEmail,
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildCommentsSection(String? tripId) {
+    if (tripId == null) {
+      return const SizedBox.shrink();
+    }
+
+    final commentRepository = LocationCommentRepository();
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: AppColors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(Icons.comment, size: 20, color: AppColors.primary),
+              const SizedBox(width: 8),
+              const Text(
+                'Journey Comments',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          StreamBuilder<List<LocationCommentModel>>(
+            stream: commentRepository.getTripComments(tripId),
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(
+                  child: Padding(
+                    padding: EdgeInsets.all(16),
+                    child: CircularProgressIndicator(),
+                  ),
+                );
+              }
+
+              if (snapshot.hasError) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Text(
+                    'Error loading comments: ${snapshot.error}',
+                    style: const TextStyle(color: AppColors.error, fontSize: 12),
+                  ),
+                );
+              }
+
+              final comments = snapshot.data ?? [];
+
+              if (comments.isEmpty) {
+                return Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(Icons.comment_outlined, size: 32, color: Colors.grey[400]),
+                        const SizedBox(height: 8),
+                        Text(
+                          'No comments yet',
+                          style: TextStyle(color: Colors.grey[600], fontSize: 13),
+                        ),
+                      ],
+                    ),
+                  ),
+                );
+              }
+
+              return Column(
+                children: comments.map((comment) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 12),
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.background,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: AppColors.border.withOpacity(0.5)),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            CircleAvatar(
+                              radius: 16,
+                              backgroundColor: AppColors.accent.withValues(alpha: 0.1),
+                              child: Text(
+                                comment.userName.isNotEmpty 
+                                    ? comment.userName[0].toUpperCase() 
+                                    : 'U',
+                                style: const TextStyle(
+                                  color: AppColors.accent,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 12,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    comment.userName,
+                                    style: const TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: 13,
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatCommentTime(comment.timestamp),
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      color: Colors.grey[600],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        if (comment.tags != null && comment.tags!.isNotEmpty)
+                          Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Wrap(
+                              spacing: 4,
+                              children: comment.tags!.map((tag) {
+                                return Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                  decoration: BoxDecoration(
+                                    color: AppColors.accent.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    tag,
+                                    style: const TextStyle(
+                                      fontSize: 10,
+                                      color: AppColors.accent,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                );
+                              }).toList(),
+                            ),
+                          ),
+                        Text(
+                          comment.comment,
+                          style: const TextStyle(fontSize: 13, height: 1.4),
+                        ),
+                        const SizedBox(height: 6),
+                        Row(
+                          children: [
+                            Icon(Icons.location_on, size: 12, color: Colors.grey[500]),
+                            const SizedBox(width: 4),
+                            Expanded(
+                              child: Text(
+                                '${comment.lat.toStringAsFixed(4)}, ${comment.lng.toStringAsFixed(4)}',
+                                style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<Map<String, String>> _fetchUserInfo(String userId) async {
+    try {
+      // First try to get from Firestore users collection
+      final userDoc = await FirebaseFirestore.instance
+          .collection('users')
+          .doc(userId)
+          .get();
+
+      if (userDoc.exists) {
+        final userData = userDoc.data() as Map<String, dynamic>?;
+        final email = userData?['email'] as String?;
+        final name = userData?['name'] as String? ?? userData?['displayName'] as String?;
+        
+        if (email != null) {
+          return {
+            'email': email,
+            'name': name ?? email.split('@')[0],
+          };
+        }
+      }
+
+      // If not found in Firestore, try to get from Firebase Auth
+      // Note: This requires admin SDK or we can just show the userId
+      // For now, we'll show a formatted version of userId
+      return {
+        'email': 'User ID: $userId',
+        'name': 'User ${userId.substring(0, 8)}',
+      };
+    } catch (e) {
+      return {
+        'email': 'Error loading user',
+        'name': 'N/A',
+      };
+    }
+  }
+
+  String _formatCommentTime(DateTime timestamp) {
+    final now = DateTime.now();
+    final difference = now.difference(timestamp);
+
+    if (difference.inMinutes < 1) {
+      return 'Just now';
+    } else if (difference.inHours < 1) {
+      return '${difference.inMinutes}m ago';
+    } else if (difference.inDays < 1) {
+      return '${difference.inHours}h ago';
+    } else if (difference.inDays < 7) {
+      return '${difference.inDays}d ago';
+    } else {
+      return '${timestamp.day}/${timestamp.month}/${timestamp.year}';
+    }
   }
 
   void _refreshTrips() {

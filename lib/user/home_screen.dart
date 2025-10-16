@@ -472,24 +472,25 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             children: [
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: typeColor.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Icon(typeIcon, size: 24, color: typeColor),
-                      ),
-                      const SizedBox(width: 12),
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Row(
-                            children: [
-                              Text(
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: typeColor.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(typeIcon, size: 24, color: typeColor),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: Text(
                                 trip.destination == 'Unknown' 
                                   ? '${trip.origin} → ???'
                                   : '${trip.origin} → ${trip.destination}',
@@ -497,25 +498,30 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
                                 ),
+                                maxLines: 2,
+                                overflow: TextOverflow.ellipsis,
                               ),
-                              if (trip.destination == 'Unknown') ...[
-                                const SizedBox(width: 6),
-                                Icon(Icons.explore, size: 16, color: AppColors.accent),
-                              ],
-                            ],
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Trip #${trip.tripNumber} • ${trip.mode}',
-                            style: TextStyle(
-                              fontSize: 12,
-                              color: Colors.grey[600],
                             ),
+                            if (trip.destination == 'Unknown') ...[
+                              const SizedBox(width: 6),
+                              Icon(Icons.explore, size: 16, color: AppColors.accent),
+                            ],
+                          ],
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Trip #${trip.tripNumber} • ${trip.mode}',
+                          style: TextStyle(
+                            fontSize: 12,
+                            color: Colors.grey[600],
                           ),
-                        ],
-                      ),
-                    ],
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 8),
                   Container(
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
