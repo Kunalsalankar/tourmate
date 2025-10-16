@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'dart:async';
+import 'package:geolocator/geolocator.dart';
 import '../../core/colors.dart';
 import '../../core/models/trip_model.dart';
 import '../../cubit/trip_cubit.dart';
@@ -513,15 +514,25 @@ class _TripFormWidgetState extends State<TripFormWidget> with SingleTickerProvid
             hintText: 'Where are you starting from?',
             helperText: 'Your starting location',
             prefixIcon: const Icon(Icons.trip_origin, color: AppColors.iconPrimary),
-            suffixIcon: controller.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear, size: 20),
-                  onPressed: () {
-                    controller.clear();
-                    _originController.clear();
-                  },
-                )
-              : const Icon(Icons.search, color: AppColors.iconSecondary),
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.my_location, size: 20),
+                  onPressed: () => _useCurrentLocationAsOrigin(controller),
+                  tooltip: 'Use current location',
+                  color: AppColors.primary,
+                ),
+                if (controller.text.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.clear, size: 20),
+                    onPressed: () {
+                      controller.clear();
+                      _originController.clear();
+                    },
+                  ),
+              ],
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: AppColors.inputBorder),
@@ -688,15 +699,25 @@ class _TripFormWidgetState extends State<TripFormWidget> with SingleTickerProvid
             hintText: 'Where are you going?',
             helperText: 'Your destination location',
             prefixIcon: const Icon(Icons.location_on, color: AppColors.error),
-            suffixIcon: controller.text.isNotEmpty
-              ? IconButton(
-                  icon: const Icon(Icons.clear, size: 20),
-                  onPressed: () {
-                    controller.clear();
-                    _destinationController.clear();
-                  },
-                )
-              : const Icon(Icons.search, color: AppColors.iconSecondary),
+            suffixIcon: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  icon: const Icon(Icons.my_location, size: 20),
+                  onPressed: () => _useCurrentLocationAsDestination(controller),
+                  tooltip: 'Use current location',
+                  color: AppColors.primary,
+                ),
+                if (controller.text.isNotEmpty)
+                  IconButton(
+                    icon: const Icon(Icons.clear, size: 20),
+                    onPressed: () {
+                      controller.clear();
+                      _destinationController.clear();
+                    },
+                  ),
+              ],
+            ),
             border: OutlineInputBorder(
               borderRadius: BorderRadius.circular(12),
               borderSide: const BorderSide(color: AppColors.inputBorder),
@@ -1493,6 +1514,168 @@ class _TripFormWidgetState extends State<TripFormWidget> with SingleTickerProvid
     setState(() {
       _accompanyingTravellers.removeAt(index);
     });
+  }
+
+  /// Get current location and use it as origin
+  Future<void> _useCurrentLocationAsOrigin(TextEditingController controller) async {
+    try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Getting your location...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Get current position
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // Get address from coordinates using reverse geocoding
+      final suggestions = await _placesService.getAutocompleteSuggestions(
+        '${position.latitude},${position.longitude}',
+        sessionToken: _sessionToken,
+      );
+
+      String locationText = 'Current Location (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
+      
+      if (suggestions.isNotEmpty) {
+        locationText = suggestions.first.description;
+      }
+
+      // Update the text field
+      setState(() {
+        controller.text = locationText;
+        _originController.text = locationText;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Location set successfully'),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Error getting location: $e')),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
+
+  /// Get current location and use it as destination
+  Future<void> _useCurrentLocationAsDestination(TextEditingController controller) async {
+    try {
+      // Show loading indicator
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Row(
+            children: [
+              SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
+                ),
+              ),
+              SizedBox(width: 12),
+              Text('Getting your location...'),
+            ],
+          ),
+          duration: Duration(seconds: 2),
+        ),
+      );
+
+      // Get current position
+      final position = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high,
+      );
+
+      // Get address from coordinates using reverse geocoding
+      final suggestions = await _placesService.getAutocompleteSuggestions(
+        '${position.latitude},${position.longitude}',
+        sessionToken: _sessionToken,
+      );
+
+      String locationText = 'Current Location (${position.latitude.toStringAsFixed(4)}, ${position.longitude.toStringAsFixed(4)})';
+      
+      if (suggestions.isNotEmpty) {
+        locationText = suggestions.first.description;
+      }
+
+      // Update the text field
+      setState(() {
+        controller.text = locationText;
+        _destinationController.text = locationText;
+      });
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Row(
+              children: [
+                Icon(Icons.check_circle, color: Colors.white),
+                SizedBox(width: 12),
+                Text('Location set successfully'),
+              ],
+            ),
+            backgroundColor: AppColors.success,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Row(
+              children: [
+                const Icon(Icons.error_outline, color: Colors.white),
+                const SizedBox(width: 12),
+                Expanded(child: Text('Error getting location: $e')),
+              ],
+            ),
+            backgroundColor: AppColors.error,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
   }
 
   void _submitForm() {

@@ -144,15 +144,28 @@ class MapsNavigationCubit extends Cubit<MapsNavigationState> {
 
   /// Set route origin and destination
   Future<void> setRoute(LatLng origin, LatLng destination) async {
+    print('[DEBUG] setRoute called: origin=$origin, destination=$destination');
     emit(MapsNavigationLoading());
 
     try {
+      // Validate coordinates
+      if (origin.latitude == 0 && origin.longitude == 0) {
+        emit(MapsNavigationError('Invalid origin coordinates. Please select a valid location.'));
+        return;
+      }
+      
+      if (destination.latitude == 0 && destination.longitude == 0) {
+        emit(MapsNavigationError('Invalid destination coordinates. Please select a valid location.'));
+        return;
+      }
 
+      print('[DEBUG] Getting directions from Maps Service...');
       // Get route directions
       final directions = await _mapsService.getDirections(origin, destination);
+      print('[DEBUG] Directions received: ${directions.keys}');
 
       if (directions.isEmpty) {
-        emit(MapsNavigationError('Failed to get directions'));
+        emit(MapsNavigationError('Failed to get directions. Please try again.'));
         return;
       }
 

@@ -10,6 +10,7 @@ import '../core/models/place_model.dart';
 import '../cubit/maps_navigation_cubit.dart';
 import '../core/services/route_tracking_service.dart';
 import '../core/services/connectivity_service.dart';
+import '../core/services/places_autocomplete_service.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String? initialOrigin;
@@ -53,6 +54,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
   // Connectivity service
   final ConnectivityService _connectivityService = ConnectivityService();
   bool _isConnected = true;
+  
+  // Places autocomplete service
+  final PlacesAutocompleteService _placesService = PlacesAutocompleteService();
   
   // Debounce timers for search
   Timer? _originSearchDebounce;
@@ -230,28 +234,35 @@ class _NavigationScreenState extends State<NavigationScreen> {
     return Container(
       padding: const EdgeInsets.all(16),
       color: Colors.white,
-      child: Column(
-        children: [
+      constraints: BoxConstraints(
+        maxHeight: MediaQuery.of(context).size.height * 0.5,
+      ),
+      child: SingleChildScrollView(
+        child: Column(
+          children: [
           // Origin search
           _buildSearchField(
             controller: _originController,
             hint: 'Enter origin',
             onChanged: _searchOrigin,
             results: _originSearchResults,
-            onResultTap: (place) {
+            onResultTap: (place) async {
+              // Fetch actual coordinates for the place
+              final placeWithCoords = await _fetchPlaceCoordinates(place);
+              
               setState(() {
-                _selectedOrigin = place;
-                _originController.text = place.name;
+                _selectedOrigin = placeWithCoords;
+                _originController.text = placeWithCoords.name;
                 _originSearchResults = [];
               });
               _addMarker(
-                place.location,
-                place.name,
+                placeWithCoords.location,
+                placeWithCoords.name,
                 BitmapDescriptor.defaultMarkerWithHue(
                   BitmapDescriptor.hueGreen,
                 ),
               );
-              _moveCamera(place.location);
+              _moveCamera(placeWithCoords.location);
             },
           ),
 
@@ -263,18 +274,21 @@ class _NavigationScreenState extends State<NavigationScreen> {
             hint: 'Enter destination',
             onChanged: _searchDestination,
             results: _destinationSearchResults,
-            onResultTap: (place) {
+            onResultTap: (place) async {
+              // Fetch actual coordinates for the place
+              final placeWithCoords = await _fetchPlaceCoordinates(place);
+              
               setState(() {
-                _selectedDestination = place;
-                _destinationController.text = place.name;
+                _selectedDestination = placeWithCoords;
+                _destinationController.text = placeWithCoords.name;
                 _destinationSearchResults = [];
               });
               _addMarker(
-                place.location,
-                place.name,
+                placeWithCoords.location,
+                placeWithCoords.name,
                 BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
               );
-              _moveCamera(place.location);
+              _moveCamera(placeWithCoords.location);
             },
           ),
 
@@ -295,7 +309,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
               child: const Text('Get Directions'),
             ),
           ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -374,6 +389,29 @@ class _NavigationScreenState extends State<NavigationScreen> {
     );
   }
 
+  // Fetch actual coordinates for a place using Place Details API
+  Future<PlaceModel> _fetchPlaceCoordinates(PlaceModel place) async {
+    try {
+      final placeDetails = await _placesService.getPlaceDetails(place.placeId);
+      
+      if (placeDetails != null) {
+        return PlaceModel(
+          placeId: place.placeId,
+          name: placeDetails.name,
+          address: placeDetails.formattedAddress,
+          location: LatLng(placeDetails.latitude, placeDetails.longitude),
+        );
+      }
+      
+      // If failed to fetch details, return original place
+      return place;
+    } catch (e) {
+      print('[DEBUG] Error fetching place coordinates: $e');
+      // Return original place if error occurs
+      return place;
+    }
+  }
+
   // Search for origin places
   Future<void> _searchOrigin(String query) async {
     print('[DEBUG] _searchOrigin called with query: $query');
@@ -401,37 +439,49 @@ class _NavigationScreenState extends State<NavigationScreen> {
       });
 
       try {
-        final results = await context.read<MapsNavigationCubit>().searchPlaces(
-          query,
-        );
+        final suggestions = await _placesService.getAutocompleteSuggestions(query);
+        
+        // Convert to PlaceModel
+        final results = suggestions.map((prediction) {
+          return PlaceModel(
+            placeId: prediction.placeId,
+            name: prediction.mainText,
+            address: prediction.description,
+            location: const LatLng(0, 0), // Will be fetched when selected
+          );
+        }).toList();
 
         if (!mounted) return;
 
         setState(() {
           _originSearchResults = results;
           _isSearching = false;
-          
-          // If we have exactly one result, auto-select it
-          if (results.length == 1) {
-            _selectedOrigin = results.first;
-            _originController.text = results.first.name;
-            _originSearchResults = []; // Clear search results after selection
-            
-            // Add marker for the selected origin
-            _addMarker(
-              results.first.location,
-              results.first.name,
-              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-            );
-            _moveCamera(results.first.location);
-            
-            // Force UI update to enable Get Directions button if destination is also selected
-            if (_selectedDestination != null) {
-              print('[DEBUG] Both origin and destination selected, enabling Get Directions button');
-              setState(() {}); // Explicitly trigger rebuild to update button state
-            }
-          }
         });
+        
+        // If we have exactly one result, auto-select it
+        if (results.length == 1) {
+          final placeWithCoords = await _fetchPlaceCoordinates(results.first);
+          
+          setState(() {
+            _selectedOrigin = placeWithCoords;
+            _originController.text = placeWithCoords.name;
+            _originSearchResults = []; // Clear search results after selection
+          });
+          
+          // Add marker for the selected origin
+          _addMarker(
+            placeWithCoords.location,
+            placeWithCoords.name,
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
+          );
+          _moveCamera(placeWithCoords.location);
+          
+          // Force UI update to enable Get Directions button if destination is also selected
+          if (_selectedDestination != null) {
+            print('[DEBUG] Both origin and destination selected, enabling Get Directions button');
+            setState(() {}); // Explicitly trigger rebuild to update button state
+          }
+        }
         print('[DEBUG] _searchOrigin results: ${results.length}');
       } catch (e) {
         print('[DEBUG] Error searching for origin: $e');
@@ -474,36 +524,49 @@ class _NavigationScreenState extends State<NavigationScreen> {
       });
 
       try {
-        final results = await context.read<MapsNavigationCubit>().searchPlaces(
-          query,
-        );
+        final suggestions = await _placesService.getAutocompleteSuggestions(query);
+        
+        // Convert to PlaceModel
+        final results = suggestions.map((prediction) {
+          return PlaceModel(
+            placeId: prediction.placeId,
+            name: prediction.mainText,
+            address: prediction.description,
+            location: const LatLng(0, 0), // Will be fetched when selected
+          );
+        }).toList();
 
         if (!mounted) return;
 
         setState(() {
           _destinationSearchResults = results;
           _isSearching = false;
-          // If we have exactly one result, auto-select it
-          if (results.length == 1) {
-            _selectedDestination = results.first;
-            _destinationController.text = results.first.name;
-            _destinationSearchResults = []; // Clear search results after selection
-            
-            // Add marker for the selected destination
-            _addMarker(
-              results.first.location,
-              results.first.name,
-              BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
-            );
-            _moveCamera(results.first.location);
-            
-            // Force UI update to enable Get Directions button if origin is also selected
-            if (_selectedOrigin != null) {
-              print('[DEBUG] Both origin and destination selected, enabling Get Directions button');
-              setState(() {}); // Explicitly trigger rebuild to update button state
-            }
-          }
         });
+        
+        // If we have exactly one result, auto-select it
+        if (results.length == 1) {
+          final placeWithCoords = await _fetchPlaceCoordinates(results.first);
+          
+          setState(() {
+            _selectedDestination = placeWithCoords;
+            _destinationController.text = placeWithCoords.name;
+            _destinationSearchResults = []; // Clear search results after selection
+          });
+          
+          // Add marker for the selected destination
+          _addMarker(
+            placeWithCoords.location,
+            placeWithCoords.name,
+            BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueRed),
+          );
+          _moveCamera(placeWithCoords.location);
+          
+          // Force UI update to enable Get Directions button if origin is also selected
+          if (_selectedOrigin != null) {
+            print('[DEBUG] Both origin and destination selected, enabling Get Directions button');
+            setState(() {}); // Explicitly trigger rebuild to update button state
+          }
+        }
         print('[DEBUG] _searchDestination results: ${results.length}');
       } catch (e) {
         print('[DEBUG] Error searching for destination: $e');
@@ -679,9 +742,19 @@ class _NavigationScreenState extends State<NavigationScreen> {
       final latLng = LatLng(position.latitude, position.longitude);
       
       // Get address for current location using reverse geocoding
-      final results = await context.read<MapsNavigationCubit>().searchPlaces(
+      final suggestions = await _placesService.getAutocompleteSuggestions(
         '${position.latitude},${position.longitude}',
       );
+      
+      // Convert to PlaceModel
+      final results = suggestions.map((prediction) {
+        return PlaceModel(
+          placeId: prediction.placeId,
+          name: prediction.mainText,
+          address: prediction.description,
+          location: LatLng(position.latitude, position.longitude),
+        );
+      }).toList();
       
       String placeName = 'Current Location';
       String placeAddress = 'Your Location';

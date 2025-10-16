@@ -26,23 +26,25 @@ class TripCubit extends Cubit<TripState> {
 
   /// Get all trips for the current user
   Future<void> getUserTrips() async {
+    if (isClosed) return;
     emit(TripLoading());
     try {
       final trips = await _tripRepository.getUserTrips();
-      emit(TripLoaded(trips));
+      if (!isClosed) emit(TripLoaded(trips));
     } catch (e) {
-      emit(TripError(e.toString()));
+      if (!isClosed) emit(TripError(e.toString()));
     }
   }
 
   /// Get all trips (for admin)
   Future<void> getAllTrips() async {
+    if (isClosed) return;
     emit(TripLoading());
     try {
       final trips = await _tripRepository.getAllTrips();
-      emit(TripLoaded(trips));
+      if (!isClosed) emit(TripLoaded(trips));
     } catch (e) {
-      emit(TripError(e.toString()));
+      if (!isClosed) emit(TripError(e.toString()));
     }
   }
 
