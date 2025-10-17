@@ -1234,7 +1234,6 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
                     ],
                     // User Information Section
                     const SizedBox(height: 16),
-                    _buildUserInfoSection(trip.userId),
                     // Journey Comments Section
                     const SizedBox(height: 16),
                     _buildCommentsSection(trip.id),
@@ -1296,96 +1295,6 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
           Expanded(child: Text(value)),
         ],
       ),
-    );
-  }
-
-  Widget _buildUserInfoSection(String userId) {
-    return FutureBuilder<Map<String, String>>(
-      future: _fetchUserInfo(userId),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState == ConnectionState.waiting) {
-          return Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppColors.surface,
-              borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: AppColors.border),
-            ),
-            child: const Center(
-              child: Padding(
-                padding: EdgeInsets.all(16),
-                child: CircularProgressIndicator(),
-              ),
-            ),
-          );
-        }
-
-        final userInfo = snapshot.data ?? {'email': 'Unknown User', 'name': 'N/A'};
-        final userEmail = userInfo['email']!;
-        final userName = userInfo['name']!;
-
-        return Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: AppColors.surface,
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AppColors.border),
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(Icons.person, size: 20, color: AppColors.primary),
-                  const SizedBox(width: 8),
-                  
-                ],
-              ),
-              const SizedBox(height: 12),
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 24,
-                    backgroundColor: AppColors.primary.withValues(alpha: 0.1),
-                    child: Text(
-                      userEmail.isNotEmpty ? userEmail[0].toUpperCase() : 'U',
-                      style: const TextStyle(
-                        color: AppColors.primary,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 20,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (userName != 'N/A')
-                          Text(
-                            userName,
-                            style: const TextStyle(
-                              fontWeight: FontWeight.bold,
-                              fontSize: 14,
-                            ),
-                          ),
-                        Text(
-                          userEmail,
-                          style: TextStyle(
-                            fontSize: 13,
-                            color: AppColors.textSecondary,
-                          ),
-                        ),
-                      
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-        );
-      },
     );
   }
 
