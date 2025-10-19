@@ -48,6 +48,7 @@ class _AdminSignInScreenState extends State<AdminSignInScreen> {
               ),
             );
           }
+          //if the user is authenticated, navigate to admin dashboard
           if (state is AuthSuccess) {
             Navigator.of(context).pushReplacementNamed('/admin-trips');
           }
