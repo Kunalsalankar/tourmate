@@ -5,6 +5,8 @@ import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:overlay_support/overlay_support.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'firebase_options.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
+import 'core/services/firebase_messaging_background.dart';
 import 'app/app.dart';
 import 'core/services/notification_service.dart';
 
@@ -35,6 +37,15 @@ void main() async {
   await notificationService.requestPermissions();
   // Android 13+ requires explicit POST_NOTIFICATIONS runtime permission
   await Permission.notification.request();
+
+  // Register background handler for data-only FCM
+  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+  // Ensure foreground notifications show on iOS (no-op on Android)
+  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+    alert: true,
+    badge: true,
+    sound: true,
+  );
   
   runApp(
     OverlaySupport.global(

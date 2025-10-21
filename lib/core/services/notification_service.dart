@@ -1,5 +1,8 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
 import '../models/place_model.dart';
 import '../models/location_comment_model.dart';
 
@@ -58,24 +61,64 @@ class NotificationService {
   /// Show a notification for a nearby location comment
   Future<void> showLocationCommentNotification(LocationCommentModel comment) async {
     try {
-      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-        'location_comments_channel',
-        'Location Comments',
-        channelDescription: 'Notifications for comments near your location',
-        importance: Importance.high,
-        priority: Priority.high,
-        showWhen: true,
-        icon: '@mipmap/ic_launcher',
-        styleInformation: BigTextStyleInformation(''),
-      );
+      String? cachedPath;
+      if ((comment.photoUrl ?? '').isNotEmpty) {
+        cachedPath = await _cacheImageFromUrl(comment.photoUrl!);
+        debugPrint('🔔 Notification image cached: ${cachedPath ?? 'null'}');
+      } else {
+        debugPrint('🔔 Notification without image');
+      }
 
-      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      );
+      AndroidNotificationDetails androidDetails;
+      if (cachedPath != null) {
+        androidDetails = AndroidNotificationDetails(
+          'location_comments_channel',
+          'Location Comments',
+          channelDescription: 'Notifications for comments near your location',
+          importance: Importance.high,
+          priority: Priority.high,
+          showWhen: true,
+          icon: '@mipmap/ic_launcher',
+          styleInformation: BigPictureStyleInformation(
+            FilePathAndroidBitmap(cachedPath),
+            largeIcon: null,
+            hideExpandedLargeIcon: true,
+            contentTitle: 'Nearby comment by ${comment.userName}',
+            summaryText: comment.comment,
+          ),
+        );
+      } else {
+        androidDetails = const AndroidNotificationDetails(
+          'location_comments_channel',
+          'Location Comments',
+          channelDescription: 'Notifications for comments near your location',
+          importance: Importance.high,
+          priority: Priority.high,
+          showWhen: true,
+          icon: '@mipmap/ic_launcher',
+          styleInformation: BigTextStyleInformation(''),
+        );
+      }
 
-      const NotificationDetails details = NotificationDetails(
+      DarwinNotificationDetails iosDetails;
+      if (cachedPath != null) {
+        iosDetails = DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          attachments: [
+            DarwinNotificationAttachment(cachedPath),
+          ],
+        );
+      } else {
+        iosDetails = const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        );
+      }
+
+      final details = NotificationDetails(
         android: androidDetails,
         iOS: iosDetails,
       );
@@ -89,6 +132,38 @@ class NotificationService {
       );
     } catch (e) {
       debugPrint('❌ Error showing location comment notification: $e');
+    }
+  }
+
+  Future<String?> _cacheImageFromUrl(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      final res = await http.get(uri);
+      if (res.statusCode != 200) {
+        debugPrint('🔔 Image download failed: ${res.statusCode} ${res.reasonPhrase}');
+        return null;
+      }
+      final dir = await getTemporaryDirectory();
+      // Try to infer extension; default to .jpg
+      final ext = _guessImageExtension(res.headers['content-type']);
+      final file = File('${dir.path}/notif_${DateTime.now().millisecondsSinceEpoch}.$ext');
+      await file.writeAsBytes(res.bodyBytes);
+      return file.path;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  String _guessImageExtension(String? contentType) {
+    switch (contentType) {
+      case 'image/png':
+        return 'png';
+      case 'image/webp':
+        return 'webp';
+      case 'image/gif':
+        return 'gif';
+      default:
+        return 'jpg';
     }
   }
 
@@ -107,35 +182,71 @@ class NotificationService {
     return result ?? false;
   }
 
-  /// Show a notification for a nearby place
-  Future<void> showNearbyPlaceNotification(PlaceModel place, String s) async {
+  /// Show a notification for a nearby place (optionally with an image)
+  Future<void> showNearbyPlaceNotification(PlaceModel place, String s, {String? imageUrl}) async {
     try {
-      // Android notification details
-      const AndroidNotificationDetails androidPlatformChannelSpecifics =
-          AndroidNotificationDetails(
-        'nearby_places_channel',
-        'Nearby Places',
-        channelDescription: 'Notifications for nearby places of interest',
-        importance: Importance.high,
-        priority: Priority.high,
-        showWhen: true,
+      String? cachedPath;
+      if ((imageUrl ?? '').isNotEmpty) {
+        cachedPath = await _cacheImageFromUrl(imageUrl!);
+        debugPrint('🔔 Nearby place image cached: ${cachedPath ?? 'null'}');
+      }
+      // Fallback: try place.icon if primary image failed or not provided
+      if (cachedPath == null && (place.icon ?? '').isNotEmpty) {
+        cachedPath = await _cacheImageFromUrl(place.icon!);
+        debugPrint('🔔 Nearby place icon cached: ${cachedPath ?? 'null'}');
+      }
+
+      AndroidNotificationDetails androidDetails;
+      if (cachedPath != null) {
+        androidDetails = AndroidNotificationDetails(
+          'nearby_places_channel',
+          'Nearby Places',
+          channelDescription: 'Notifications for nearby places of interest',
+          importance: Importance.high,
+          priority: Priority.high,
+          showWhen: true,
+          styleInformation: BigPictureStyleInformation(
+            FilePathAndroidBitmap(cachedPath),
+            largeIcon: null,
+            hideExpandedLargeIcon: true,
+            contentTitle: 'Nearby: ${place.name}',
+            summaryText: 'You are near ${place.name}. ${place.address}',
+          ),
+        );
+      } else {
+        androidDetails = const AndroidNotificationDetails(
+          'nearby_places_channel',
+          'Nearby Places',
+          channelDescription: 'Notifications for nearby places of interest',
+          importance: Importance.high,
+          priority: Priority.high,
+          showWhen: true,
+        );
+      }
+
+      DarwinNotificationDetails iosDetails;
+      if (cachedPath != null) {
+        iosDetails = DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+          attachments: [
+            DarwinNotificationAttachment(cachedPath),
+          ],
+        );
+      } else {
+        iosDetails = const DarwinNotificationDetails(
+          presentAlert: true,
+          presentBadge: true,
+          presentSound: true,
+        );
+      }
+
+      final platformChannelSpecifics = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
       );
 
-      // iOS notification details
-      const DarwinNotificationDetails iOSPlatformChannelSpecifics =
-          DarwinNotificationDetails(
-        presentAlert: true,
-        presentBadge: true,
-        presentSound: true,
-      );
-
-      // Notification details for all platforms
-      const NotificationDetails platformChannelSpecifics = NotificationDetails(
-        android: androidPlatformChannelSpecifics,
-        iOS: iOSPlatformChannelSpecifics,
-      );
-
-      // Show the notification
       await _flutterLocalNotificationsPlugin.show(
         _getNextNotificationId(),
         'Nearby: ${place.name}',

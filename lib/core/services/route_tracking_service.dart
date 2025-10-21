@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:geolocator/geolocator.dart';
 import '../models/place_model.dart';
 import 'location_service.dart';
@@ -231,9 +232,35 @@ class RouteTrackingService {
 
       // Send notification if within radius
       if (distance <= _notificationRadius) {
+        // If we have a Places photo_reference, build a photo URL to enrich the notification
+        String? imageUrl;
+        if (place.photoReference != null && place.photoReference!.isNotEmpty) {
+          final key = dotenv.env['GOOGLE_MAPS_API_KEY'];
+          if (key != null && key.isNotEmpty) {
+            imageUrl = 'https://maps.googleapis.com/maps/api/place/photo'
+                '?maxwidth=640&photo_reference=${Uri.encodeComponent(place.photoReference!)}&key=$key';
+          }
+        }
+        // Fallback to Street View Static image if no photo reference available
+        if (imageUrl == null) {
+          final key = dotenv.env['GOOGLE_MAPS_API_KEY'];
+          if (key != null && key.isNotEmpty) {
+            final lat = place.location.latitude;
+            final lng = place.location.longitude;
+            imageUrl = 'https://maps.googleapis.com/maps/api/streetview'
+                '?size=640x360&location=$lat,$lng&key=$key';
+          }
+        }
+
+        // Final fallback to the place icon URL (usually a small PNG), requires no API key
+        if (imageUrl == null && (place.icon ?? '').isNotEmpty) {
+          imageUrl = place.icon;
+        }
+
         _notificationService.showNearbyPlaceNotification(
           place,
           'You are near ${place.name}. ${place.address}',
+          imageUrl: imageUrl,
         );
         _notifiedPlaceIds.add(place.placeId);
       }
