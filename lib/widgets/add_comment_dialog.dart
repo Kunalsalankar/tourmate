@@ -1,6 +1,12 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import '../core/colors.dart';
+import '../firebase_options.dart';
 import '../core/models/location_comment_model.dart';
 import '../core/repositories/location_comment_repository.dart';
 
@@ -26,6 +32,8 @@ class AddCommentDialog extends StatefulWidget {
 class _AddCommentDialogState extends State<AddCommentDialog> {
   final TextEditingController _commentController = TextEditingController();
   final LocationCommentRepository _repository = LocationCommentRepository();
+  final ImagePicker _picker = ImagePicker();
+  XFile? _pickedImage;
   
   bool _isSubmitting = false;
   String? _selectedTag;
@@ -50,6 +58,54 @@ class _AddCommentDialogState extends State<AddCommentDialog> {
     super.dispose();
   }
 
+  Future<void> _pickPhoto() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.camera,
+        imageQuality: 75,
+        maxWidth: 1600,
+        maxHeight: 1600,
+      );
+      if (image != null) {
+        setState(() {
+          _pickedImage = image;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to capture photo: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
+  Future<void> _pickFromGallery() async {
+    try {
+      final XFile? image = await _picker.pickImage(
+        source: ImageSource.gallery,
+        imageQuality: 75,
+        maxWidth: 1600,
+        maxHeight: 1600,
+      );
+      if (image != null) {
+        setState(() {
+          _pickedImage = image;
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Failed to pick from gallery: $e'),
+          backgroundColor: AppColors.error,
+        ),
+      );
+    }
+  }
+
   Future<void> _submitComment() async {
     if (_commentController.text.trim().isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -64,6 +120,38 @@ class _AddCommentDialogState extends State<AddCommentDialog> {
     setState(() => _isSubmitting = true);
 
     try {
+      String? photoUrl;
+
+      // If a photo was selected, upload to Firebase Storage
+      if (_pickedImage != null) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user == null) {
+          throw Exception('You must be signed in to upload a photo');
+        }
+        final file = File(_pickedImage!.path);
+        final fileName = '${DateTime.now().millisecondsSinceEpoch}.jpg';
+        final bucket = DefaultFirebaseOptions.currentPlatform.storageBucket;
+        // Debug bucket and destination path
+        // ignore: avoid_print
+        print('[AddCommentDialog] Upload bucket: $bucket');
+        final storage = FirebaseStorage.instanceFor(app: Firebase.app(), bucket: bucket);
+        final rootRef = storage.refFromURL('gs://$bucket');
+        final fullRef = rootRef.child('comment_photos').child(user.uid).child(fileName);
+        // ignore: avoid_print
+        print('[AddCommentDialog] Upload path: ${fullRef.fullPath}');
+        try {
+          final task = await fullRef.putFile(
+            file,
+            SettableMetadata(contentType: 'image/jpeg'),
+          );
+          photoUrl = await task.ref.getDownloadURL();
+        } on FirebaseException catch (e) {
+          // ignore: avoid_print
+          print('[AddCommentDialog] Upload failed: code=${e.code} message=${e.message}');
+          rethrow;
+        }
+      }
+
       final comment = LocationCommentModel(
         uid: widget.userId,
         userName: widget.userName,
@@ -73,6 +161,7 @@ class _AddCommentDialogState extends State<AddCommentDialog> {
         timestamp: DateTime.now(),
         tripId: widget.tripId,
         tags: _selectedTag != null ? [_selectedTag!] : null,
+        photoUrl: photoUrl,
       );
 
       final commentId = await _repository.addComment(comment);
@@ -254,9 +343,57 @@ class _AddCommentDialogState extends State<AddCommentDialog> {
                   filled: true,
                   fillColor: Colors.white,
                   counterStyle: const TextStyle(fontSize: 11),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        tooltip: 'Pick from gallery',
+                        icon: const Icon(Icons.photo, color: AppColors.accent),
+                        onPressed: _isSubmitting ? null : _pickFromGallery,
+                      ),
+                      IconButton(
+                        tooltip: 'Capture photo',
+                        icon: const Icon(Icons.camera_alt, color: AppColors.accent),
+                        onPressed: _isSubmitting ? null : _pickPhoto,
+                      ),
+                    ],
+                  ),
                 ),
                 textCapitalization: TextCapitalization.sentences,
               ),
+
+              // Thumbnail preview (if any)
+              if (_pickedImage != null) ...[
+                const SizedBox(height: 10),
+                Row(
+                  children: [
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: Image.file(
+                        File(_pickedImage!.path),
+                        height: 64,
+                        width: 64,
+                        fit: BoxFit.cover,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    TextButton.icon(
+                      onPressed: _isSubmitting
+                          ? null
+                          : () {
+                              setState(() {
+                                _pickedImage = null;
+                              });
+                            },
+                      icon: const Icon(Icons.delete_outline, color: AppColors.error),
+                      label: const Text(
+                        'Remove photo',
+                        style: TextStyle(color: AppColors.error),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
               const SizedBox(height: 20),
 
               // Action buttons

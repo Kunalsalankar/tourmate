@@ -14,8 +14,20 @@ void main() async {
   // Load environment variables
   await dotenv.load(fileName: '.env');
   
-  // Initialize Firebase
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+  // Initialize Firebase (guard against duplicate init)
+  try {
+    if (Firebase.apps.isEmpty) {
+      await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
+    } else {
+      // Access existing default app to ensure core is ready
+      Firebase.app();
+    }
+  } on FirebaseException catch (e) {
+    if (e.code != 'duplicate-app') {
+      rethrow;
+    }
+    // Safe to ignore duplicate-app: default already initialized by platform/plugins
+  }
   
   // Initialize Notification Service
   final notificationService = NotificationService();

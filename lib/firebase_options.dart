@@ -57,7 +57,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1042575440295',
     projectId: 'rafe-3a961',
     databaseURL: 'https://rafe-3a961-default-rtdb.firebaseio.com',
-    storageBucket: 'rafe-3a961.firebasestorage.app',
+    storageBucket: 'rafe-3a961.appspot.com',
   );
 
   static const FirebaseOptions ios = FirebaseOptions(
@@ -66,7 +66,7 @@ class DefaultFirebaseOptions {
     messagingSenderId: '1042575440295',
     projectId: 'rafe-3a961',
     databaseURL: 'https://rafe-3a961-default-rtdb.firebaseio.com',
-    storageBucket: 'rafe-3a961.firebasestorage.app',
+    storageBucket: 'rafe-3a961.appspot.com',
     iosBundleId: 'com.example.tourmate',
   );
 
@@ -87,7 +87,7 @@ class DefaultFirebaseOptions {
     projectId: 'rafe-3a961',
     authDomain: 'rafe-3a961.firebaseapp.com',
     databaseURL: 'https://rafe-3a961-default-rtdb.firebaseio.com',
-    storageBucket: 'rafe-3a961.firebasestorage.app',
+    storageBucket: 'rafe-3a961.appspot.com',
     measurementId: 'G-FKEXE1813F',
   );
 }

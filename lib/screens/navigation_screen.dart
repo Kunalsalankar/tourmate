@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'package:geocoding/geocoding.dart' as geocoding;
 import 'package:geolocator/geolocator.dart';
 import '../core/colors.dart';
 import '../core/models/place_model.dart';
@@ -729,74 +730,116 @@ class _NavigationScreenState extends State<NavigationScreen> {
     setState(() {
       _isSearching = true;
     });
-    
     try {
-      // Get current position
-      final position = await Geolocator.getCurrentPosition(
-        desiredAccuracy: LocationAccuracy.high,
-      );
-      
-      if (!mounted) return;
-      
-      // Create a place model for current location
-      final latLng = LatLng(position.latitude, position.longitude);
-      
-      // Get address for current location using reverse geocoding
-      final suggestions = await _placesService.getAutocompleteSuggestions(
-        '${position.latitude},${position.longitude}',
-      );
-      
-      // Convert to PlaceModel
-      final results = suggestions.map((prediction) {
-        return PlaceModel(
-          placeId: prediction.placeId,
-          name: prediction.mainText,
-          address: prediction.description,
-          location: LatLng(position.latitude, position.longitude),
+      // Check if location services are enabled at system level
+      final serviceEnabled = await Geolocator.isLocationServiceEnabled();
+      print('[DEBUG] Location serviceEnabled=$serviceEnabled');
+      if (!serviceEnabled) {
+        if (!mounted) return;
+        setState(() => _isSearching = false);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Location services are turned off. Enable to use current location.'),
+            action: SnackBarAction(
+              label: 'Enable',
+              onPressed: () {
+                Geolocator.openLocationSettings();
+              },
+            ),
+          ),
         );
-      }).toList();
-      
+        return;
+      }
+
+      LocationPermission perm = await Geolocator.checkPermission();
+      print('[DEBUG] Location permission (before request)=$perm');
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) {
+        if (!mounted) return;
+        setState(() => _isSearching = false);
+        final isForever = perm == LocationPermission.deniedForever;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              isForever
+                  ? 'Location permission permanently denied. Open settings to enable.'
+                  : 'Location permission is required to use current location',
+            ),
+            action: isForever
+                ? SnackBarAction(
+                    label: 'Open Settings',
+                    onPressed: () {
+                      Geolocator.openAppSettings();
+                    },
+                  )
+                : null,
+          ),
+        );
+        return;
+      }
+
+      Position? position;
+      try {
+        position = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.best, timeLimit: const Duration(seconds: 10));
+      } catch (_) {}
+      position ??= await Geolocator.getLastKnownPosition();
+      print('[DEBUG] CurrentPosition=${position != null}');
+      if (position == null) {
+        throw Exception('Unable to obtain current or last known location');
+      }
+
+      if (!mounted) return;
+      final latLng = LatLng(position.latitude, position.longitude);
+
+      // Reverse geocode for a user-friendly label/address
       String placeName = 'Current Location';
       String placeAddress = 'Your Location';
-      
-      // If we got results from reverse geocoding, use the first one
-      if (results.isNotEmpty) {
-        placeName = results.first.name;
-        placeAddress = results.first.address;
+      try {
+        final List<geocoding.Placemark> placemarks = await geocoding.placemarkFromCoordinates(
+          position.latitude,
+          position.longitude,
+        );
+        if (placemarks.isNotEmpty) {
+          final p = placemarks.first;
+          placeName = p.name?.isNotEmpty == true
+              ? p.name!
+              : (p.locality?.isNotEmpty == true ? p.locality! : 'Current Location');
+          final parts = [
+            if ((p.street ?? '').isNotEmpty) p.street,
+            if ((p.locality ?? '').isNotEmpty) p.locality,
+            if ((p.administrativeArea ?? '').isNotEmpty) p.administrativeArea,
+            if ((p.country ?? '').isNotEmpty) p.country,
+          ].whereType<String>().toList();
+          if (parts.isNotEmpty) {
+            placeAddress = parts.join(', ');
+          }
+        }
+      } catch (_) {
+        // Fallback already set
       }
-      
-      // Create a place model for current location
+
       final currentPlace = PlaceModel(
         placeId: 'current_location',
         name: placeName,
         address: placeAddress,
         location: latLng,
       );
-      
-      // Set as selected origin
+
       setState(() {
         _selectedOrigin = currentPlace;
         _originController.text = placeName;
         _originSearchResults = [];
         _isSearching = false;
-        
-        // Add marker for current location
-        _addMarker(
-          latLng,
-          placeName,
-          BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen),
-        );
+        _addMarker(latLng, placeName, BitmapDescriptor.defaultMarkerWithHue(BitmapDescriptor.hueGreen));
         _moveCamera(latLng);
-        
-        // Force UI update to enable Get Directions button if destination is also selected
         if (_selectedDestination != null) {
           setState(() {});
         }
       });
-      
     } catch (e) {
       if (!mounted) return;
-      print('[DEBUG] Error getting current location: $e');
       setState(() {
         _isSearching = false;
       });
