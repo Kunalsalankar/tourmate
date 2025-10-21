@@ -10,9 +10,19 @@ class LocationService {
   factory LocationService() => _instance;
   LocationService._internal();
 
-  // Stream controller for location updates
-  final StreamController<Position> _locationController = StreamController<Position>.broadcast();
-  Stream<Position> get locationStream => _locationController.stream;
+  // Stream controller for location updates (recoverable)
+  StreamController<Position>? _locationController;
+  Stream<Position> get locationStream {
+    _ensureController();
+    return _locationController!.stream;
+  }
+
+  void _ensureController() {
+    _locationController ??= StreamController<Position>.broadcast();
+    if (_locationController!.isClosed) {
+      _locationController = StreamController<Position>.broadcast();
+    }
+  }
 
   // Current position
   Position? _currentPosition;
@@ -85,7 +95,8 @@ class LocationService {
       
       // Add to stream
       if (_currentPosition != null) {
-        _locationController.add(_currentPosition!);
+        _ensureController();
+        _locationController!.add(_currentPosition!);
       }
       
       // Start listening to position updates
@@ -96,7 +107,8 @@ class LocationService {
         ),
       ).listen((Position position) {
         _currentPosition = position;
-        _locationController.add(position);
+        _ensureController();
+        _locationController!.add(position);
       });
       
       _isTracking = true;
@@ -129,6 +141,6 @@ class LocationService {
   /// Dispose resources
   void dispose() {
     stopTracking();
-    _locationController.close();
+    // Do not close the broadcast controller here to allow re-use across app services
   }
 }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../models/place_model.dart';
+import '../models/location_comment_model.dart';
 
 /// A service that handles local notifications
 class NotificationService {
@@ -51,6 +52,43 @@ class NotificationService {
     } catch (e) {
       debugPrint('❌ Error initializing notification service: $e');
       rethrow;
+    }
+  }
+
+  /// Show a notification for a nearby location comment
+  Future<void> showLocationCommentNotification(LocationCommentModel comment) async {
+    try {
+      const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+        'location_comments_channel',
+        'Location Comments',
+        channelDescription: 'Notifications for comments near your location',
+        importance: Importance.high,
+        priority: Priority.high,
+        showWhen: true,
+        icon: '@mipmap/ic_launcher',
+        styleInformation: BigTextStyleInformation(''),
+      );
+
+      const DarwinNotificationDetails iosDetails = DarwinNotificationDetails(
+        presentAlert: true,
+        presentBadge: true,
+        presentSound: true,
+      );
+
+      const NotificationDetails details = NotificationDetails(
+        android: androidDetails,
+        iOS: iosDetails,
+      );
+
+      await _flutterLocalNotificationsPlugin.show(
+        _getNextNotificationId(),
+        'Nearby comment by ${comment.userName}',
+        comment.comment,
+        details,
+        payload: comment.id ?? 'location_comment',
+      );
+    } catch (e) {
+      debugPrint('❌ Error showing location comment notification: $e');
     }
   }
 

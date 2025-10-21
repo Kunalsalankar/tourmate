@@ -25,6 +25,9 @@ class RouteTrackingService {
   Timer? _nearbyPlacesTimer;
   final double _notificationRadius = 500; // meters
   final double _routeDeviationThreshold = 200; // meters
+  StreamSubscription<Position>? _locationStreamSubscription;
+  DateTime? _lastNearbyCheck;
+  final Duration _nearbyCheckDebounce = const Duration(seconds: 30);
 
   // Stream controllers
   final _nearbyPlacesController =
@@ -53,7 +56,7 @@ class RouteTrackingService {
 
     // Start location tracking
     await _locationService.startTracking();
-    _locationService.locationStream.listen(_onPositionUpdate);
+    _locationStreamSubscription = _locationService.locationStream.listen(_onPositionUpdate);
 
     // Start periodic nearby places check
     _nearbyPlacesTimer = Timer.periodic(const Duration(minutes: 1), (_) {
@@ -68,6 +71,8 @@ class RouteTrackingService {
   void stopRouteTracking() {
     _isTracking = false;
     _locationService.stopTracking();
+    _locationStreamSubscription?.cancel();
+    _locationStreamSubscription = null;
     _nearbyPlacesTimer?.cancel();
     _nearbyPlacesTimer = null;
   }
@@ -76,12 +81,16 @@ class RouteTrackingService {
   void _onPositionUpdate(Position position) {
     if (!_isTracking) return;
 
-    // Broadcast current position
-    _currentPositionController.add(position);
+    // Broadcast current position (guard if controller is closed)
+    if (!_currentPositionController.isClosed) {
+      _currentPositionController.add(position);
+    }
 
     // Check if user has deviated from route
     final isOnRoute = _isOnRoute(position);
-    _routeDeviationController.add(!isOnRoute);
+    if (!_routeDeviationController.isClosed) {
+      _routeDeviationController.add(!isOnRoute);
+    }
 
     // Check for nearby places when position changes significantly
     _checkNearbyPlaces();
@@ -112,6 +121,11 @@ class RouteTrackingService {
   // Check for nearby places along the route
   Future<void> _checkNearbyPlaces() async {
     if (!_isTracking) return;
+    final now = DateTime.now();
+    if (_lastNearbyCheck != null && now.difference(_lastNearbyCheck!) < _nearbyCheckDebounce) {
+      return;
+    }
+    _lastNearbyCheck = now;
 
     try {
       // Get current position
@@ -144,7 +158,9 @@ class RouteTrackingService {
 
       // Update nearby places
       _nearbyPlaces = uniquePlaces.toList();
-      _nearbyPlacesController.add(_nearbyPlaces);
+      if (!_nearbyPlacesController.isClosed) {
+        _nearbyPlacesController.add(_nearbyPlaces);
+      }
 
       // Check for places that need notifications
       _checkForNotifications(position);
@@ -216,7 +232,7 @@ class RouteTrackingService {
       // Send notification if within radius
       if (distance <= _notificationRadius) {
         _notificationService.showNearbyPlaceNotification(
-          place.name as PlaceModel,
+          place,
           'You are near ${place.name}. ${place.address}',
         );
         _notifiedPlaceIds.add(place.placeId);

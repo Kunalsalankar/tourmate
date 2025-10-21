@@ -210,8 +210,8 @@ class _NavigationScreenState extends State<NavigationScreen> {
                     if (state is MapsNavigationLoading)
                       const Center(child: CircularProgressIndicator()),
 
-                    // Navigation overlay when active
-                    if (state is MapsNavigationActive && state.isNavigating)
+                    // Navigation overlay when active (always show to allow starting navigation)
+                    if (state is MapsNavigationActive)
                       _buildNavigationOverlay(state),
                   ],
                 ),

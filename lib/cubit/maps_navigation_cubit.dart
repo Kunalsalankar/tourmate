@@ -10,6 +10,7 @@ import '../core/services/location_service.dart';
 import '../core/services/maps_service.dart';
 import '../core/services/notification_service.dart';
 import '../core/services/route_tracking_service.dart';
+import '../core/services/location_comment_notifier_service.dart';
 
 // Maps Navigation States
 class MapsNavigationState extends Equatable {
@@ -121,7 +122,6 @@ class MapsNavigationCubit extends Cubit<MapsNavigationState> {
       // Initialize services
       await _locationService.initialize();
       await _mapsService.initialize();
-      await _notificationService.initialize();
 
       // Get current position
       final position = await _locationService.getCurrentPosition();
@@ -284,6 +284,9 @@ class MapsNavigationCubit extends Cubit<MapsNavigationState> {
     if (state is RouteLoaded) {
       final routeState = state as RouteLoaded;
       
+      // Start comment proximity notifier during navigation
+      LocationCommentNotifierService().start();
+
       emit(MapsNavigationActive(
         currentLocation: _locationService.currentPosition != null
             ? LatLng(_locationService.currentPosition!.latitude, _locationService.currentPosition!.longitude)
@@ -313,6 +316,8 @@ class MapsNavigationCubit extends Cubit<MapsNavigationState> {
     _nearbyPlacesSubscription = null;
     _routeDeviationSubscription = null;
     _routeTrackingService.stopRouteTracking();
+    // Stop comment notifier when navigation stops
+    LocationCommentNotifierService().stop();
     _routePoints = [];
     _nearbyPlaces = [];
     _notifiedPlaceIds = {};
