@@ -9,6 +9,8 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'core/services/firebase_messaging_background.dart';
 import 'app/app.dart';
 import 'core/services/notification_service.dart';
+import 'background/background_tracker.dart';
+import 'package:flutter/foundation.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,21 +33,28 @@ void main() async {
     // Safe to ignore duplicate-app: default already initialized by platform/plugins
   }
   
+  // Initialize background tracker for 15-min periodic fetch (mobile only)
+  await BackgroundTracker.init();
+  
   // Initialize Notification Service
   final notificationService = NotificationService();
   await notificationService.initialize();
-  await notificationService.requestPermissions();
-  // Android 13+ requires explicit POST_NOTIFICATIONS runtime permission
-  await Permission.notification.request();
+  if (!kIsWeb) {
+    await notificationService.requestPermissions();
+    // Android 13+ requires explicit POST_NOTIFICATIONS runtime permission
+    await Permission.notification.request();
+  }
 
   // Register background handler for data-only FCM
-  FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
-  // Ensure foreground notifications show on iOS (no-op on Android)
-  await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
-    alert: true,
-    badge: true,
-    sound: true,
-  );
+  if (!kIsWeb) {
+    FirebaseMessaging.onBackgroundMessage(firebaseMessagingBackgroundHandler);
+    // Ensure foreground notifications show on iOS (no-op on Android)
+    await FirebaseMessaging.instance.setForegroundNotificationPresentationOptions(
+      alert: true,
+      badge: true,
+      sound: true,
+    );
+  }
   
   runApp(
     OverlaySupport.global(

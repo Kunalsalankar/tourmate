@@ -10,6 +10,7 @@ import '../../user/home_screen.dart';
 import '../../admin/admin_trips_screen.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../cubit/maps_navigation_cubit.dart';
+import '../../admin/admin_location_dashboard.dart';
 
 class AppRouter {
   static const String splash = '/';
@@ -21,6 +22,7 @@ class AppRouter {
   static const String userHome = '/user-home';
   static const String adminTrips = '/admin-trips';
   static const String navigation = '/navigation';
+  static const String adminLocations = '/admin-locations';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -74,6 +76,11 @@ class AppRouter {
       case adminTrips:
         return MaterialPageRoute(
           builder: (_) => const AdminTripsScreen(),
+          settings: settings,
+        );
+      case adminLocations:
+        return MaterialPageRoute(
+          builder: (_) => const AdminLocationDashboard(),
           settings: settings,
         );
       default:

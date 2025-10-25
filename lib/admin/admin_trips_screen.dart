@@ -9,6 +9,7 @@ import '../core/models/location_comment_model.dart';
 import '../cubit/trip_cubit.dart';
 import '../core/repositories/trip_repository.dart';
 import '../core/repositories/location_comment_repository.dart';
+import '../core/navigation/app_router.dart';
 
 /// Production-ready Admin screen for comprehensive trip management
 /// Features:
@@ -119,6 +120,12 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
               onPressed: _refreshTrips,
               icon: const Icon(Icons.refresh, color: AppColors.appBarText),
               tooltip: 'Refresh',
+            ),
+            // Locations dashboard
+            IconButton(
+              onPressed: () => Navigator.of(context).pushNamed(AppRouter.adminLocations),
+              icon: const Icon(Icons.location_on, color: AppColors.appBarText),
+              tooltip: 'Locations',
             ),
             // Sign out
             IconButton(
@@ -407,6 +414,12 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
                 ),
               ),
               const Spacer(),
+              TextButton.icon(
+                onPressed: () => Navigator.of(context).pushNamed(AppRouter.adminLocations),
+                icon: const Icon(Icons.location_searching, size: 16),
+                label: const Text('See all trip latest location'),
+                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
+              ),
               if (_searchQuery.isNotEmpty || _selectedFilter != 'all')
                 TextButton.icon(
                   onPressed: () {

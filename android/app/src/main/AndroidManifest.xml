@@ -17,6 +17,14 @@
         android:label="tourmate"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
+        <!-- Background Fetch headless task service -->
+        <service
+            android:name="com.transistorsoft.flutter.backgroundfetch.HeadlessTask"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.transistorsoft.flutter.backgroundfetch.ACTION_FETCH_EVENT" />
+            </intent-filter>
+        </service>
         <activity
             android:name=".MainActivity"
             android:exported="true"
