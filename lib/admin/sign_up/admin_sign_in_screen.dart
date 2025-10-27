@@ -3,6 +3,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../core/colors.dart';
 import '../../cubit/auth_cubit.dart';
 import '../../cubit/navigation_cubit.dart';
+import '../auth/forgot_password_screen.dart';
 
 class AdminSignInScreen extends StatefulWidget {
   const AdminSignInScreen({super.key});
@@ -227,18 +228,32 @@ class _AdminSignInScreenState extends State<AdminSignInScreen> {
                                       ),
                               ),
                             ),
-                            const SizedBox(height: 20),
+                            const SizedBox(height: 16),
                             TextButton(
                               onPressed: () {
-                                context
-                                    .read<NavigationCubit>()
-                                    .navigateToAdminSignUp();
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => const AdminForgotPasswordScreen(),
+                                  ),
+                                );
                               },
                               child: const Text(
-                                'Don\'t have an account? Sign Up',
+                                'Forgot Password?',
                                 style: TextStyle(
-                                  color: AppColors.buttonPrimary,
-                                  fontSize: 16,
+                                  color: AppColors.primary,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            TextButton(
+                              onPressed: () {
+                                context.read<NavigationCubit>().navigateToUserSignUp();
+                              },
+                              child: const Text(
+                                "Don't have an account? Sign Up",
+                                style: TextStyle(
+                                  color: AppColors.primary,
                                 ),
                               ),
                             ),
