@@ -869,7 +869,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                       const Divider(),
                       const SizedBox(height: 20),
                       _buildSectionTitle('Journey Comments', Icons.comment),
-                      const SizedBox(height: 12),
+                      const SizedBox(height: 13),
                       _buildCommentsSection(trip.id!, user.uid),
                     ],
                   ],

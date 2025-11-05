@@ -121,24 +121,7 @@ class _LocationCommentsScreenState extends State<LocationCommentsScreen> {
           return const Center(child: Text('Initializing...'));
         },
       ),
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: () async {
-          final result = await Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (context) => const AddLocationCommentScreen(),
-            ),
-          );
-          
-          if (result == true) {
-            context.read<LocationCommentCubit>().refresh();
-          }
-        },
-        heroTag: 'commentsFab',
-        icon: const Icon(Icons.add_comment),
-        label: const Text('Add Comment'),
-        backgroundColor: AppColors.primary,
-      ),
+      
     );
   }
 
