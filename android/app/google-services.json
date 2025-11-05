@@ -1,0 +1,49 @@
+{
+  "project_info": {
+    "project_number": "1042575440295",
+    "firebase_url": "https://rafe-3a961-default-rtdb.firebaseio.com",
+    "project_id": "rafe-3a961",
+    "storage_bucket": "rafe-3a961.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1042575440295:android:026b56e4d9503527e8de82",
+        "android_client_info": {
+          "package_name": "com.company.agriconnect"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5fiOLbyGXEbxTagfPhNGIdBXzxZas2Ig"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1042575440295:android:65a2ebac797d207de8de82",
+        "android_client_info": {
+          "package_name": "com.example.tourmate"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5fiOLbyGXEbxTagfPhNGIdBXzxZas2Ig"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
