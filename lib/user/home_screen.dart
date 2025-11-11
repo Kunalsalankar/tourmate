@@ -18,6 +18,7 @@ import '../cubit/bottom_nav_cubit.dart';
 import '../cubit/notification_cubit.dart';
 import '../cubit/location_comment_cubit.dart';
 import 'location_comments_screen.dart';
+import '../presentation/screens/notification_screen.dart';
 
 /// User Home Screen with trip creation and management functionality
 /// This screen provides the main interface for users to create, view, and manage their trips
@@ -116,10 +117,8 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                         Expanded(child: _buildTripsList()),
                       ],
                     ),
-                    // Notifications tab (placeholder)
-                    const Center(
-                      child: Text('Notifications'),
-                    ),
+                    // Notifications tab
+                    const NotificationScreen(),
                     // Location Comments tab
                     const LocationCommentsScreen(),
                   ],

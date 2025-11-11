@@ -11,14 +11,8 @@ plugins {
 
 android {
     namespace = "com.example.tourmate"
-    compileSdk = 34
-    ndkVersion = "25.1.8937393"
-
-    configurations.all {
-        resolutionStrategy {
-            force("androidx.core:core-ktx:1.12.0")
-        }
-    }
+    compileSdk = flutter.compileSdkVersion
+    ndkVersion = "27.0.12077973"
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
