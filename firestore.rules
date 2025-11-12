@@ -1,0 +1,112 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // ------------------------
+    // Helper functions
+    // ------------------------
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return /databases/$(database)/documents/users/$(request.auth.uid);
+    }
+
+    function isAdmin() {
+      return isSignedIn()
+        && exists(userDoc())
+        && get(userDoc()).data.role == 'admin';
+    }
+
+    // ------------------------
+    // Checkpoints
+    // ------------------------
+    match /checkpoints/{checkpointId} {
+      // Allow read if signed in
+      allow read: if isSignedIn();
+      
+      // Allow create if signed in and the userId matches the authenticated user
+      allow create: if isSignedIn() 
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number;
+        
+      // Only allow updates to specific fields (if needed)
+      allow update: if isSignedIn() 
+        && (resource.data.userId == request.auth.uid || isAdmin())
+        && request.resource.data.userId == resource.data.userId
+        && request.resource.data.timestamp == resource.data.timestamp;
+        
+      // Only allow deletion by admin or the user who created it
+      allow delete: if isSignedIn() 
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // ------------------------
+    // Location Comments
+    // ------------------------
+    match /location_comments/{commentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn();
+      allow update: if isSignedIn()
+        && (request.resource.data.userId == request.auth.uid || isAdmin());
+      allow delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // ------------------------
+    // Latest Trip Locations (realtime tracking)
+    // One doc per trip: id == tripId
+    // ------------------------
+    match /latest_trip_locations/{tripId} {
+      // Owner, driver (same uid as write), or admin can read
+      allow read: if isSignedIn()
+        && (isTripOwner(tripId) || isAdmin() || resource.data.driverId == request.auth.uid);
+
+      // Driver writes to his own trip's doc only
+      allow write: if isSignedIn()
+        && request.resource.data.driverId == request.auth.uid
+        && request.resource.data.tripId == tripId
+        && isTripOwner(tripId);
+    }
+
+    // ------------------------
+    // Trip Locations (Checkpoints)
+    // ------------------------
+    match /trip_locations/{locationId} {
+      // Owner, driver, or admin may read
+      allow read: if isSignedIn()
+        && (isTripOwner(resource.data.tripId) || isAdmin() || resource.data.driverId == request.auth.uid);
+
+      // Allow owner to create checkpoints (even for past trips to support manual import)
+      allow create: if isSignedIn()
+        && isTripOwner(request.resource.data.tripId)
+        && request.resource.data.driverId == request.auth.uid
+        && request.resource.data.latitude is number
+        && request.resource.data.longitude is number
+        && request.resource.data.recordedAt is timestamp
+        && request.resource.data.tripId is string;
+
+      allow update, delete: if false;
+    }
+
+    // ------------------------
+    // Trips
+    // ------------------------
+    match /trips/{tripId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+
+    // ------------------------
+    // Users
+    // ------------------------
+    match /users/{userId} {
+      allow read, write: if isSignedIn() && request.auth.uid == userId;
+    }
+  }
+}

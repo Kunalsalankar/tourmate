@@ -3,6 +3,12 @@ import 'dart:math';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:uuid/uuid.dart';
+
+import '../core/models/checkpoint_model.dart';
 
 abstract class CheckpointEvent {
   const CheckpointEvent();
@@ -187,42 +193,44 @@ class NotificationCubit extends Cubit<NotificationState> {
     try {
       _checkpointCounter++;
       
-      // Get current position or use last known position
-      Position? position = _lastKnownPosition;
-      if (position == null) {
-        position = await Geolocator.getCurrentPosition(
-          desiredAccuracy: LocationAccuracy.high,
-        );
-        _lastKnownPosition = position;
-      }
-
-      final newCheckpoint = Checkpoint(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
+      final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown';
+      final userName = FirebaseAuth.instance.currentUser?.displayName ?? 'Unknown User';
+      final checkpointId = const Uuid().v4();
+      final now = DateTime.now();
+      
+      // Create a new checkpoint model
+      final newCheckpoint = CheckpointModel(
+        id: checkpointId,
+        userId: userId,
+        userName: userName,
         title: 'Checkpoint #$_checkpointCounter',
-        timestamp: DateTime.now(),
-        latitude: position.latitude,
-        longitude: position.longitude,
+        timestamp: now,
+        latitude: _lastKnownPosition?.latitude ?? 0.0,
+        longitude: _lastKnownPosition?.longitude ?? 0.0,
       );
 
+      // Save to Firestore
+      await FirebaseFirestore.instance
+          .collection('checkpoints')
+          .doc(checkpointId)
+          .set(newCheckpoint.toMap());
+          
+      // Update local state with a simplified checkpoint
       final updatedCheckpoints = List<Checkpoint>.from(state.checkpoints)
-        ..insert(0, newCheckpoint);
+        ..insert(0, Checkpoint(
+          id: checkpointId,
+          title: 'Checkpoint #$_checkpointCounter',
+          timestamp: now,
+          latitude: _lastKnownPosition?.latitude,
+          longitude: _lastKnownPosition?.longitude,
+        ));
 
       emit(state.copyWith(checkpoints: updatedCheckpoints));
     } catch (e) {
-      // If we can't get the current position, create a checkpoint without location
-      final newCheckpoint = Checkpoint(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        title: 'Checkpoint #$_checkpointCounter',
-        timestamp: DateTime.now(),
-      );
-
-      final updatedCheckpoints = List<Checkpoint>.from(state.checkpoints)
-        ..insert(0, newCheckpoint);
-
-      emit(state.copyWith(
-        checkpoints: updatedCheckpoints,
-        error: 'Could not get location: $e',
-      ));
+      emit(state.copyWith(error: 'Failed to add checkpoint: $e'));
+      // Clear the error after a short delay
+      await Future.delayed(const Duration(seconds: 3));
+      emit(state.copyWith(error: null));
     }
   }
 }
