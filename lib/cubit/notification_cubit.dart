@@ -185,11 +185,16 @@ class NotificationCubit extends Cubit<NotificationState> {
 
     // Create a new timer that fires every 10 seconds
     _checkpointTimer = Timer.periodic(const Duration(seconds: 10), (timer) {
+      if (isClosed) {
+        timer.cancel();
+        return;
+      }
       _addCheckpoint();
     });
   }
 
   Future<void> _addCheckpoint() async {
+    if (isClosed) return;
     try {
       _checkpointCounter++;
       
@@ -225,12 +230,17 @@ class NotificationCubit extends Cubit<NotificationState> {
           longitude: _lastKnownPosition?.longitude,
         ));
 
-      emit(state.copyWith(checkpoints: updatedCheckpoints));
+      if (!isClosed) {
+        emit(state.copyWith(checkpoints: updatedCheckpoints));
+      }
     } catch (e) {
+      if (isClosed) return;
       emit(state.copyWith(error: 'Failed to add checkpoint: $e'));
       // Clear the error after a short delay
       await Future.delayed(const Duration(seconds: 3));
-      emit(state.copyWith(error: null));
+      if (!isClosed) {
+        emit(state.copyWith(error: null));
+      }
     }
   }
 }

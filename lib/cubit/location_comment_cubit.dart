@@ -121,6 +121,9 @@ class LocationCommentCubit extends Cubit<LocationCommentState> {
 
   /// Update nearby comments based on current position
   void _updateNearbyComments(Position? position) {
+    if (isClosed) {
+      return;
+    }
     if (position == null) {
       emit(LocationCommentLoaded(
         nearbyComments: [],

@@ -12,6 +12,25 @@ service cloud.firestore {
       return /databases/$(database)/documents/users/$(request.auth.uid);
     }
 
+    function tripDoc(tripId) {
+      return /databases/$(database)/documents/trips/$(tripId);
+    }
+
+    function tripExists(tripId) {
+      return exists(tripDoc(tripId));
+    }
+
+    function isTripOwner(tripId) {
+      return isSignedIn()
+        && tripExists(tripId)
+        && get(tripDoc(tripId)).data.userId == request.auth.uid;
+    }
+
+    function isTripActive(tripId) {
+      return tripExists(tripId)
+        && get(tripDoc(tripId)).data.tripType == 'active';
+    }
+
     function isAdmin() {
       return isSignedIn()
         && exists(userDoc())
@@ -22,24 +41,17 @@ service cloud.firestore {
     // Checkpoints
     // ------------------------
     match /checkpoints/{checkpointId} {
-      // Allow read if signed in
-      allow read: if isSignedIn();
-      
-      // Allow create if signed in and the userId matches the authenticated user
-      allow create: if isSignedIn() 
+      allow read: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+
+      allow create: if isSignedIn()
         && request.resource.data.userId == request.auth.uid
-        && request.resource.data.timestamp is timestamp
         && request.resource.data.latitude is number
-        && request.resource.data.longitude is number;
-        
-      // Only allow updates to specific fields (if needed)
-      allow update: if isSignedIn() 
-        && (resource.data.userId == request.auth.uid || isAdmin())
-        && request.resource.data.userId == resource.data.userId
-        && request.resource.data.timestamp == resource.data.timestamp;
-        
-      // Only allow deletion by admin or the user who created it
-      allow delete: if isSignedIn() 
+        && request.resource.data.longitude is number
+        && request.resource.data.timestamp is timestamp
+        && request.resource.data.createdAt is timestamp;
+
+      allow update, delete: if isSignedIn()
         && (resource.data.userId == request.auth.uid || isAdmin());
     }
 
