@@ -102,6 +102,12 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
               icon: const Icon(Icons.download, color: AppColors.appBarText),
               tooltip: 'Export Data',
             ),
+            // Checkpoints dashboard
+            IconButton(
+              onPressed: () => Navigator.of(context).pushNamed(AppRouter.adminCheckpoints),
+              icon: const Icon(Icons.flag, color: AppColors.appBarText),
+              tooltip: 'Checkpoints',
+            ),
             // View mode toggle
             IconButton(
               onPressed: () {

@@ -54,12 +54,20 @@ class NotificationState {
   final List<Checkpoint> checkpoints;
   final bool isLoading;
   final String? error;
+  final String? activeTripId;
+  final String? activeTripTitle;
+  final String? activeTripDestination;
+  final String? activeTripMode;
 
   NotificationState({
     this.message,
     List<Checkpoint>? checkpoints,
     this.isLoading = false,
     this.error,
+    this.activeTripId,
+    this.activeTripTitle,
+    this.activeTripDestination,
+    this.activeTripMode,
   }) : checkpoints = checkpoints ?? [];
 
   NotificationState copyWith({
@@ -67,12 +75,21 @@ class NotificationState {
     List<Checkpoint>? checkpoints,
     bool? isLoading,
     String? error,
+    String? activeTripId,
+    String? activeTripTitle,
+    String? activeTripDestination,
+    String? activeTripMode,
   }) {
     return NotificationState(
       message: message ?? this.message,
       checkpoints: checkpoints ?? this.checkpoints,
       isLoading: isLoading ?? this.isLoading,
       error: error,
+      activeTripId: activeTripId ?? this.activeTripId,
+      activeTripTitle: activeTripTitle ?? this.activeTripTitle,
+      activeTripDestination:
+          activeTripDestination ?? this.activeTripDestination,
+      activeTripMode: activeTripMode ?? this.activeTripMode,
     );
   }
 
@@ -83,11 +100,24 @@ class NotificationState {
         other.message == message &&
         const ListEquality().equals(other.checkpoints, checkpoints) &&
         other.isLoading == isLoading &&
-        other.error == error;
+        other.error == error &&
+        other.activeTripId == activeTripId &&
+        other.activeTripTitle == activeTripTitle &&
+        other.activeTripDestination == activeTripDestination &&
+        other.activeTripMode == activeTripMode;
   }
 
   @override
-  int get hashCode => Object.hash(message, checkpoints, isLoading, error);
+  int get hashCode => Object.hash(
+        message,
+        checkpoints,
+        isLoading,
+        error,
+        activeTripId,
+        activeTripTitle,
+        activeTripDestination,
+        activeTripMode,
+      );
 }
 
 class NotificationCubit extends Cubit<NotificationState> {
@@ -95,6 +125,8 @@ class NotificationCubit extends Cubit<NotificationState> {
   int _checkpointCounter = 0;
   StreamSubscription<Position>? _positionStream;
   Position? _lastKnownPosition;
+  Map<String, dynamic>? _activeTripData;
+  bool _activeTripMissingNotified = false;
 
   NotificationCubit() : super(NotificationState()) {
     _initializeLocationService();
@@ -145,6 +177,8 @@ class NotificationCubit extends Cubit<NotificationState> {
         _lastKnownPosition = position;
       });
 
+      await _loadActiveTrip();
+
       // Start the checkpoint timer
       _startCheckpointTimer();
     } catch (e) {
@@ -179,6 +213,10 @@ class NotificationCubit extends Cubit<NotificationState> {
     }
   }
 
+  Future<void> refreshActiveTrip() async {
+    await _loadActiveTrip();
+  }
+
   void _startCheckpointTimer() {
     // Cancel any existing timer
     _checkpointTimer?.cancel();
@@ -196,6 +234,21 @@ class NotificationCubit extends Cubit<NotificationState> {
   Future<void> _addCheckpoint() async {
     if (isClosed) return;
     try {
+      if (_activeTripData == null) {
+        await _loadActiveTrip();
+      }
+
+      if (_activeTripData == null) {
+        if (!_activeTripMissingNotified) {
+          _activeTripMissingNotified = true;
+          emit(state.copyWith(
+            error: 'No active trip found. Start or resume a trip to record checkpoints.',
+          ));
+        }
+        return;
+      }
+      _activeTripMissingNotified = false;
+
       _checkpointCounter++;
       
       final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown';
@@ -212,6 +265,11 @@ class NotificationCubit extends Cubit<NotificationState> {
         timestamp: now,
         latitude: _lastKnownPosition?.latitude ?? 0.0,
         longitude: _lastKnownPosition?.longitude ?? 0.0,
+        tripId: _activeTripData?['id'] as String?,
+        tripNumber: _activeTripData?['number'] as String?,
+        tripDestination: _activeTripData?['destination'] as String?,
+        tripMode: _activeTripData?['mode'] as String?,
+        tripStatus: _activeTripData?['status'] as String?,
       );
 
       // Save to Firestore
@@ -241,6 +299,75 @@ class NotificationCubit extends Cubit<NotificationState> {
       if (!isClosed) {
         emit(state.copyWith(error: null));
       }
+    }
+  }
+
+  Future<void> _loadActiveTrip() async {
+    if (isClosed) return;
+
+    try {
+      final userId = FirebaseAuth.instance.currentUser?.uid;
+      if (userId == null) {
+        emit(state.copyWith(
+          activeTripId: null,
+          activeTripTitle: null,
+          activeTripDestination: null,
+          activeTripMode: null,
+        ));
+        return;
+      }
+
+      final query = await FirebaseFirestore.instance
+          .collection('trips')
+          .where('userId', isEqualTo: userId)
+          .where('tripType', isEqualTo: 'active')
+          .limit(1)
+          .get();
+
+      if (query.docs.isEmpty) {
+        _activeTripData = null;
+        emit(state.copyWith(
+          activeTripId: null,
+          activeTripTitle: null,
+          activeTripDestination: null,
+          activeTripMode: null,
+        ));
+        return;
+      }
+
+      final doc = query.docs.first;
+      final data = doc.data();
+      final timestamp = data['time'];
+      DateTime? scheduled;
+      if (timestamp is Timestamp) {
+        scheduled = timestamp.toDate();
+      }
+
+      final tripTitle = (data['tripNumber'] as String?)?.isNotEmpty == true
+          ? data['tripNumber'] as String
+          : 'Trip ${doc.id.substring(0, 6)}';
+
+      _activeTripData = {
+        'id': doc.id,
+        'number': data['tripNumber'],
+        'destination': data['destination'],
+        'mode': data['mode'],
+        'status': data['tripType'] ?? 'active',
+        'scheduledFor': scheduled,
+      };
+
+      emit(state.copyWith(
+        activeTripId: doc.id,
+        activeTripTitle: tripTitle,
+        activeTripDestination: data['destination'] as String?,
+        activeTripMode: data['mode'] as String?,
+      ));
+      _activeTripMissingNotified = false;
+    } catch (e) {
+      if (isClosed) return;
+      emit(state.copyWith(
+        error: 'Unable to load active trip: $e',
+      ));
     }
   }
 }

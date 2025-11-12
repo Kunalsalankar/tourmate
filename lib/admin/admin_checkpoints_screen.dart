@@ -22,9 +22,6 @@ class _AdminCheckpointsScreenState extends State<AdminCheckpointsScreen> {
   @override
   void initState() {
     super.initState();
-    // Initialize the cubit and load checkpoints
-    context.read<AdminCheckpointCubit>().loadCheckpoints();
-    
     // Add listener to scroll controller for infinite scroll if needed
     _scrollController.addListener(_onScroll);
   }
@@ -118,6 +115,151 @@ class _AdminCheckpointsScreenState extends State<AdminCheckpointsScreen> {
         );
       }
     }
+  }
+
+  Widget _buildActiveTripGroupsSection(List<TripCheckpointGroup> groups) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Active Trips',
+          style: TextStyle(
+            fontSize: 16,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        const SizedBox(height: 8),
+        ListView.builder(
+          shrinkWrap: true,
+          physics: const NeverScrollableScrollPhysics(),
+          itemCount: groups.length,
+          itemBuilder: (context, index) {
+            return _buildActiveTripCard(groups[index]);
+          },
+        ),
+        const SizedBox(height: 12),
+      ],
+    );
+  }
+
+  Widget _buildActiveTripCard(TripCheckpointGroup group) {
+    final subtitleParts = <String>[];
+    if (group.tripDestination != null && group.tripDestination!.isNotEmpty) {
+      subtitleParts.add('Destination: ${group.tripDestination}');
+    }
+    if (group.tripMode != null && group.tripMode!.isNotEmpty) {
+      subtitleParts.add('Mode: ${group.tripMode}');
+    }
+    final subtitleText = subtitleParts.join(' • ');
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      elevation: 2,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: Colors.grey[200]!),
+      ),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        childrenPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        title: Text(
+          group.tripNumber ?? 'Trip ${group.tripId}',
+          style: const TextStyle(
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            if (group.userName != null && group.userName!.isNotEmpty)
+              Text(
+                group.userName!,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            if (subtitleText.isNotEmpty)
+              Text(
+                subtitleText,
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            if (group.lastUpdatedAt != null)
+              Text(
+                'Last checkpoint: ${_dateFormat.format(group.lastUpdatedAt!)}',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+          ],
+        ),
+        children: [
+          Align(
+            alignment: Alignment.centerLeft,
+            child: Text(
+              'Recent checkpoints (${group.checkpoints.length})',
+              style: const TextStyle(
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          ...group.checkpoints.take(5).map(
+            (checkpoint) => Padding(
+              padding: const EdgeInsets.symmetric(vertical: 6.0),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Icon(
+                    Icons.location_on,
+                    size: 18,
+                    color: AppColors.primary,
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          _dateFormat.format(checkpoint.timestamp),
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          '${checkpoint.latitude.toStringAsFixed(5)}, ${checkpoint.longitude.toStringAsFixed(5)}',
+                          style: const TextStyle(
+                            fontSize: 12,
+                            color: AppColors.textSecondary,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+          if (group.checkpoints.length > 5)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '+ ${group.checkpoints.length - 5} more checkpoints',
+                style: const TextStyle(
+                  fontSize: 12,
+                  color: AppColors.textSecondary,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
   }
 
   Widget _buildCheckpointCard(CheckpointModel checkpoint) {
@@ -319,6 +461,12 @@ class _AdminCheckpointsScreenState extends State<AdminCheckpointsScreen> {
                     ],
                   ),
                 ),
+
+                if (state.activeTripGroups.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                    child: _buildActiveTripGroupsSection(state.activeTripGroups),
+                  ),
 
                 // Checkpoints list
                 Expanded(

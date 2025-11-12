@@ -192,7 +192,7 @@ class _AdminSignInScreenState extends State<AdminSignInScreen> {
                                     ? null
                                     : () {
                                         if (_formKey.currentState!.validate()) {
-                                          context.read<AuthCubit>().signIn(
+                                          context.read<AuthCubit>().signInAdmin(
                                             _emailController.text.trim(),
                                             _passwordController.text.trim(),
                                           );

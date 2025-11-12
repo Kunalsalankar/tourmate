@@ -23,9 +23,12 @@ class NotificationScreen extends StatelessWidget {
               icon: const Icon(Icons.refresh),
               onPressed: () {
                 // Refresh the checkpoints
-                context.read<NotificationCubit>().add(
-                  const AddCheckpointEvent(),
-                );
+                final cubit = context.read<NotificationCubit>();
+                cubit.add(
+                const AddCheckpointEvent(),
+              );
+                cubit.refreshActiveTrip();
+                cubit.clearError();
               },
               tooltip: 'Refresh',
             ),
@@ -51,12 +54,12 @@ class NotificationScreen extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Header Section
-                const Padding(
-                  padding: EdgeInsets.all(16.0),
+                Padding(
+                  padding: const EdgeInsets.all(16.0),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
+                      const Text(
                         'Checkpoint Recorder',
                         style: TextStyle(
                           fontSize: 20,
@@ -64,76 +67,40 @@ class NotificationScreen extends StatelessWidget {
                           color: AppColors.textPrimary,
                         ),
                       ),
-                      SizedBox(height: 4),
-                      Text(
-                        'A new checkpoint is recorded every 10 seconds',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                      ),
+                      const SizedBox(height: 8),
+                      _buildTripStatus(state),
                     ],
                   ),
                 ),
-                
-                // Checkpoints List
-                if (state.checkpoints.isEmpty)
-                  const Expanded(
-                    child: Center(
+                Expanded(
+                  child: Center(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 24.0),
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.center,
                         children: [
-                          Icon(
-                            Icons.location_off,
-                            size: 48,
-                            color: AppColors.textSecondary,
+                          const Icon(
+                            Icons.shield_outlined,
+                            size: 72,
+                            color: AppColors.primary,
                           ),
-                          SizedBox(height: 16),
+                          const SizedBox(height: 16),
                           Text(
-                            'No checkpoints recorded yet',
-                            style: TextStyle(
+                            state.activeTripId == null
+                                ? 'No active trip found.\nStart an active trip to begin recording checkpoints.'
+                                : 'Checkpoints are being recorded every 10 seconds and sent to the admin dashboard for monitoring.',
+                            style: const TextStyle(
                               color: AppColors.textSecondary,
-                              fontSize: 16,
+                              fontSize: 14,
                             ),
-                          ),
-                          SizedBox(height: 8),
-                          Text(
-                            'Check back in a few seconds...',
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontSize: 12,
-                            ),
+                            textAlign: TextAlign.center,
                           ),
                         ],
                       ),
                     ),
-                  )
-                else
-                  Expanded(
-                    child: RefreshIndicator(
-                      onRefresh: () async {
-                        // Manually trigger a new checkpoint
-                        context.read<NotificationCubit>().add(
-                          const AddCheckpointEvent(),
-                        );
-                      },
-                      child: ListView.builder(
-                        padding: const EdgeInsets.only(bottom: 16),
-                        itemCount: state.checkpoints.length,
-                        itemBuilder: (context, index) {
-                          final checkpoint = state.checkpoints[index];
-                          return _buildCheckpointItem(checkpoint, context);
-                        },
-                      ),
-                    ),
                   ),
-                
-                // Status Bar
-                if (state.isLoading)
-                  const LinearProgressIndicator(
-                    backgroundColor: AppColors.primaryLight,
-                    valueColor: AlwaysStoppedAnimation<Color>(AppColors.primary),
-                  ),
+                ),
               ],
             );
           },
@@ -142,182 +109,48 @@ class NotificationScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildCheckpointItem(Checkpoint checkpoint, BuildContext context) {
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-      elevation: 2,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12.0),
-        side: const BorderSide(
-          color: AppColors.border,
-          width: 1.0,
+  Widget _buildTripStatus(NotificationState state) {
+    if (state.activeTripId == null) {
+      return const Text(
+        'Waiting for an active trip...',
+        style: TextStyle(
+          color: AppColors.textSecondary,
+          fontSize: 12,
         ),
-      ),
-      child: InkWell(
-        onTap: () {
-          // Show details in a dialog
-          _showCheckpointDetails(context, checkpoint);
-        },
-        borderRadius: BorderRadius.circular(12.0),
-        child: Padding(
-          padding: const EdgeInsets.all(12.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8.0),
-                    decoration: const BoxDecoration(
-                      color: AppColors.primaryLight,
-                      shape: BoxShape.circle,
-                    ),
-                    child: Icon(
-                      checkpoint.latitude != null && checkpoint.longitude != null
-                          ? Icons.location_on
-                          : Icons.location_off,
-                      color: AppColors.primary,
-                      size: 20,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          checkpoint.title,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          _formatTime(checkpoint.timestamp),
-                          style: TextStyle(
-                            color: AppColors.textSecondary,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const Icon(
-                    Icons.chevron_right,
-                    color: AppColors.iconSecondary,
-                  ),
-                ],
-              ),
-              if (checkpoint.latitude != null && checkpoint.longitude != null) ...[
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.gps_fixed,
-                      size: 14,
-                      color: AppColors.textSecondary,
-                    ),
-                    const SizedBox(width: 4),
-                    Expanded(
-                      child: Text(
-                        checkpoint.coordinatesText,
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 12,
-                        ),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                  ],
-                ),
-              ],
-            ],
+      );
+    }
+
+    final details = <String>[];
+    if (state.activeTripDestination != null &&
+        state.activeTripDestination!.isNotEmpty) {
+      details.add('Destination: ${state.activeTripDestination}');
+    }
+    if (state.activeTripMode != null && state.activeTripMode!.isNotEmpty) {
+      details.add('Mode: ${state.activeTripMode}');
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Recording checkpoints for ${state.activeTripTitle ?? 'active trip'}',
+          style: const TextStyle(
+            color: AppColors.textSecondary,
+            fontSize: 12,
           ),
         ),
-      ),
-    );
-  }
-
-  void _showCheckpointDetails(BuildContext context, Checkpoint checkpoint) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(checkpoint.title),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            _buildDetailRow('Time', _formatTime(checkpoint.timestamp)),
-            const SizedBox(height: 8),
-            _buildDetailRow(
-              'Location',
-              checkpoint.latitude != null && checkpoint.longitude != null
-                  ? checkpoint.coordinatesText
-                  : 'Location not available',
-            ),
-            if (checkpoint.latitude != null && checkpoint.longitude != null) ...[
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 200,
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.network(
-                    'https://maps.googleapis.com/maps/api/staticmap?center=${checkpoint.latitude},${checkpoint.longitude}&zoom=15&size=400x200&maptype=roadmap&markers=color:red%7C${checkpoint.latitude},${checkpoint.longitude}&key=YOUR_GOOGLE_MAPS_API_KEY',
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) => Container(
-                      color: Colors.grey[200],
-                      child: const Center(
-                        child: Text(
-                          'Map not available',
-                          style: TextStyle(color: Colors.grey),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-            ],
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('CLOSE'),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildDetailRow(String label, String value) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 4.0),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        if (details.isNotEmpty) ...[
+          const SizedBox(height: 4),
           Text(
-            '$label: ',
+            details.join(' • '),
             style: const TextStyle(
-              fontWeight: FontWeight.bold,
-              color: AppColors.textPrimary,
-            ),
-          ),
-          Expanded(
-            child: Text(
-              value,
-              style: const TextStyle(
-                color: AppColors.textSecondary,
-              ),
+              color: AppColors.textSecondary,
+              fontSize: 12,
             ),
           ),
         ],
-      ),
+      ],
     );
   }
 
-  String _formatTime(DateTime dateTime) {
-    return DateFormat('MMM d, yyyy - hh:mm a').format(dateTime);
-  }
 }

@@ -18,6 +18,48 @@ class AuthCubit extends Cubit<AuthState> {
     }
   }
 
+  Future<void> signInAdmin(String email, String password) async {
+    emit(AuthLoading());
+    try {
+      final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final user = credential.user;
+      if (user != null) {
+        final usersRef = FirebaseFirestore.instance.collection('users').doc(user.uid);
+        final snapshot = await usersRef.get();
+        if (snapshot.exists) {
+          final data = snapshot.data() ?? {};
+          if (data['role'] != 'admin') {
+            await usersRef.set(
+              {
+                'role': 'admin',
+                'email': user.email,
+                'displayName': user.displayName ?? (user.email?.split('@').first ?? 'Admin'),
+                'updatedAt': FieldValue.serverTimestamp(),
+              },
+              SetOptions(merge: true),
+            );
+          }
+        } else {
+          await usersRef.set({
+            'email': user.email ?? email,
+            'displayName': user.displayName ?? email.split('@').first,
+            'role': 'admin',
+            'createdAt': FieldValue.serverTimestamp(),
+            'updatedAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      emit(AuthSuccess());
+    } catch (e) {
+      emit(AuthFailure(e.toString()));
+    }
+  }
+
   Future<void> signUp(String email, String password, {String role = 'user'}) async {
     emit(AuthLoading());
     try {

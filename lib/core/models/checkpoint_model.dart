@@ -9,6 +9,11 @@ class CheckpointModel {
   final double longitude;
   final DateTime timestamp;
   final DateTime createdAt;
+  final String? tripId;
+  final String? tripNumber;
+  final String? tripDestination;
+  final String? tripMode;
+  final String? tripStatus;
 
   CheckpointModel({
     required this.id,
@@ -19,6 +24,11 @@ class CheckpointModel {
     required this.longitude,
     required this.timestamp,
     DateTime? createdAt,
+    this.tripId,
+    this.tripNumber,
+    this.tripDestination,
+    this.tripMode,
+    this.tripStatus,
   }) : createdAt = createdAt ?? DateTime.now();
 
   /// Convert CheckpointModel to Map for Firestore storage
@@ -31,6 +41,11 @@ class CheckpointModel {
       'longitude': longitude,
       'timestamp': Timestamp.fromDate(timestamp),
       'createdAt': Timestamp.fromDate(createdAt),
+      'tripId': tripId,
+      'tripNumber': tripNumber,
+      'tripDestination': tripDestination,
+      'tripMode': tripMode,
+      'tripStatus': tripStatus,
     };
   }
 
@@ -45,6 +60,11 @@ class CheckpointModel {
       longitude: (map['longitude'] as num).toDouble(),
       timestamp: (map['timestamp'] as Timestamp).toDate(),
       createdAt: (map['createdAt'] as Timestamp).toDate(),
+      tripId: map['tripId'] as String?,
+      tripNumber: map['tripNumber'] as String?,
+      tripDestination: map['tripDestination'] as String?,
+      tripMode: map['tripMode'] as String?,
+      tripStatus: map['tripStatus'] as String?,
     );
   }
 
@@ -58,6 +78,11 @@ class CheckpointModel {
     double? longitude,
     DateTime? timestamp,
     DateTime? createdAt,
+    String? tripId,
+    String? tripNumber,
+    String? tripDestination,
+    String? tripMode,
+    String? tripStatus,
   }) {
     return CheckpointModel(
       id: id ?? this.id,
@@ -68,11 +93,16 @@ class CheckpointModel {
       longitude: longitude ?? this.longitude,
       timestamp: timestamp ?? this.timestamp,
       createdAt: createdAt ?? this.createdAt,
+      tripId: tripId ?? this.tripId,
+      tripNumber: tripNumber ?? this.tripNumber,
+      tripDestination: tripDestination ?? this.tripDestination,
+      tripMode: tripMode ?? this.tripMode,
+      tripStatus: tripStatus ?? this.tripStatus,
     );
   }
 
   @override
   String toString() {
-    return 'CheckpointModel(id: $id, userId: $userId, title: $title, latitude: $latitude, longitude: $longitude, timestamp: $timestamp)';
+    return 'CheckpointModel(id: $id, userId: $userId, title: $title, latitude: $latitude, longitude: $longitude, timestamp: $timestamp, tripId: $tripId)';
   }
 }

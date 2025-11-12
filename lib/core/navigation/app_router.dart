@@ -7,10 +7,11 @@ import '../../user/sign_up/sign_up_screen.dart';
 import '../../admin/sign_up/admin_sign_in_screen.dart';
 import '../../admin/sign_up/admin_sign_up_screen.dart';
 import '../../user/home_screen.dart';
-import '../../admin/admin_trips_screen.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import '../../cubit/maps_navigation_cubit.dart';
 import '../../admin/admin_location_dashboard.dart';
+import '../../admin/admin_trips_screen.dart';
+import '../../admin/admin_checkpoints_screen.dart';
 
 class AppRouter {
   static const String splash = '/';
@@ -23,6 +24,7 @@ class AppRouter {
   static const String adminTrips = '/admin-trips';
   static const String navigation = '/navigation';
   static const String adminLocations = '/admin-locations';
+  static const String adminCheckpoints = '/admin-checkpoints';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -81,6 +83,11 @@ class AppRouter {
       case adminLocations:
         return MaterialPageRoute(
           builder: (_) => const AdminLocationDashboard(),
+          settings: settings,
+        );
+      case adminCheckpoints:
+        return MaterialPageRoute(
+          builder: (_) => const AdminCheckpointsScreen(),
           settings: settings,
         );
       default:
