@@ -390,108 +390,119 @@ class _AdminCheckpointsScreenState extends State<AdminCheckpointsScreen> {
             }
 
             // Show checkpoints list
-            return Column(
-              children: [
-                // Search bar
-                Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      hintText: 'Search checkpoints...',
-                      prefixIcon: const Icon(Icons.search),
-                      suffixIcon: _searchController.text.isNotEmpty
-                          ? IconButton(
-                              icon: const Icon(Icons.clear),
-                              onPressed: () {
-                                _searchController.clear();
-                                context.read<AdminCheckpointCubit>().clearFilter();
-                              },
-                            )
-                          : null,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(30),
-                        borderSide: BorderSide(color: Colors.grey[300]!),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
-                      filled: true,
-                      fillColor: Colors.grey[100],
-                    ),
-                    onChanged: (value) =>
-                        context.read<AdminCheckpointCubit>().filterCheckpoints(value),
-                  ),
-                ),
-
-                // Checkpoints count
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
-                  child: Row(
-                    children: [
-                      Text(
-                        '${state.filteredCheckpoints.length} checkpoints',
-                        style: const TextStyle(
-                          color: AppColors.textSecondary,
-                          fontSize: 14,
+            return RefreshIndicator(
+              onRefresh: () async {
+                context.read<AdminCheckpointCubit>().loadCheckpoints();
+              },
+              child: CustomScrollView(
+                controller: _scrollController,
+                slivers: [
+                  // Search bar
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          hintText: 'Search checkpoints...',
+                          prefixIcon: const Icon(Icons.search),
+                          suffixIcon: _searchController.text.isNotEmpty
+                              ? IconButton(
+                                  icon: const Icon(Icons.clear),
+                                  onPressed: () {
+                                    _searchController.clear();
+                                    context.read<AdminCheckpointCubit>().clearFilter();
+                                  },
+                                )
+                              : null,
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(30),
+                            borderSide: BorderSide(color: Colors.grey[300]!),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 0),
+                          filled: true,
+                          fillColor: Colors.grey[100],
                         ),
+                        onChanged: (value) =>
+                            context.read<AdminCheckpointCubit>().filterCheckpoints(value),
                       ),
-                      if (state.filterQuery != null) ...[
-                        const SizedBox(width: 8),
-                        GestureDetector(
-                          onTap: () => context.read<AdminCheckpointCubit>().clearFilter(),
-                          child: Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[200],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Text(
-                                  'Filter: ${state.filterQuery}',
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                const SizedBox(width: 4),
-                                const Icon(Icons.close, size: 14),
-                              ],
+                    ),
+                  ),
+
+                  // Checkpoints count
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8),
+                      child: Row(
+                        children: [
+                          Text(
+                            '${state.filteredCheckpoints.length} checkpoints',
+                            style: const TextStyle(
+                              color: AppColors.textSecondary,
+                              fontSize: 14,
                             ),
                           ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-
-                if (state.activeTripGroups.isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                    child: _buildActiveTripGroupsSection(state.activeTripGroups),
-                  ),
-
-                // Checkpoints list
-                Expanded(
-                  child: RefreshIndicator(
-                    onRefresh: () async {
-                      context.read<AdminCheckpointCubit>().loadCheckpoints();
-                    },
-                    child: ListView.builder(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.only(bottom: 16),
-                      itemCount: state.filteredCheckpoints.length,
-                      itemBuilder: (context, index) {
-                        return _buildCheckpointCard(state.filteredCheckpoints[index]);
-                      },
+                          if (state.filterQuery != null) ...[
+                            const SizedBox(width: 8),
+                            GestureDetector(
+                              onTap: () => context.read<AdminCheckpointCubit>().clearFilter(),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Text(
+                                      'Filter: ${state.filterQuery}',
+                                      style: const TextStyle(fontSize: 12),
+                                    ),
+                                    const SizedBox(width: 4),
+                                    const Icon(Icons.close, size: 14),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
                     ),
                   ),
-                ),
 
-                // Loading indicator for pagination
-                if (state.isLoading && state.checkpoints.isNotEmpty)
-                  const Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: Center(child: CircularProgressIndicator()),
+                  // Active Trips section
+                  if (state.activeTripGroups.isNotEmpty)
+                    SliverToBoxAdapter(
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                        child: _buildActiveTripGroupsSection(state.activeTripGroups),
+                      ),
+                    ),
+
+                  // Checkpoints list
+                  SliverList(
+                    delegate: SliverChildBuilderDelegate(
+                      (context, index) {
+                        return _buildCheckpointCard(state.filteredCheckpoints[index]);
+                      },
+                      childCount: state.filteredCheckpoints.length,
+                    ),
                   ),
-              ],
+
+                  // Loading footer for pagination
+                  if (state.isLoading && state.checkpoints.isNotEmpty)
+                    const SliverToBoxAdapter(
+                      child: Padding(
+                        padding: EdgeInsets.all(16.0),
+                        child: Center(child: CircularProgressIndicator()),
+                      ),
+                    ),
+
+                  // Bottom safe space
+                  const SliverToBoxAdapter(child: SizedBox(height: 16)),
+                ],
+              ),
             );
           },
         ),

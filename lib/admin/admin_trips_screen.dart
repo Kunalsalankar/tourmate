@@ -10,6 +10,8 @@ import '../cubit/trip_cubit.dart';
 import '../core/repositories/trip_repository.dart';
 import '../core/repositories/location_comment_repository.dart';
 import '../core/navigation/app_router.dart';
+import '../cubit/location_comment_cubit.dart';
+import '../user/location_comments_screen.dart';
 
 /// Production-ready Admin screen for comprehensive trip management
 /// Features:
@@ -33,6 +35,7 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
   String _selectedFilter = 'all';
   String _searchQuery = '';
   int _currentTabIndex = 0;
+  int _bottomNavIndex = 0;
   final List<TripType> _tripTypes = TripType.values;
   final TextEditingController _searchController = TextEditingController();
   
@@ -80,85 +83,103 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider.value(
-      value: _tripCubit,
+    return MultiBlocProvider(
+      providers: [
+        BlocProvider.value(value: _tripCubit),
+        BlocProvider(create: (_) => LocationCommentCubit()),
+      ],
       child: Scaffold(
         backgroundColor: AppColors.background,
-        appBar: AppBar(
-          title: const Text(
-            'Admin - Trip Management',
-            style: TextStyle(
-              color: AppColors.appBarText,
-              fontWeight: FontWeight.bold,
-              fontSize: 20,
-            ),
-          ),
-          backgroundColor: AppColors.appBarBackground,
-          elevation: 0,
-          actions: [
-            // Export button
-            IconButton(
-              onPressed: _exportData,
-              icon: const Icon(Icons.download, color: AppColors.appBarText),
-              tooltip: 'Export Data',
-            ),
-            // Checkpoints dashboard
-            IconButton(
-              onPressed: () => Navigator.of(context).pushNamed(AppRouter.adminCheckpoints),
-              icon: const Icon(Icons.flag, color: AppColors.appBarText),
-              tooltip: 'Checkpoints',
-            ),
-            // View mode toggle
-            IconButton(
-              onPressed: () {
-                setState(() {
-                  _isGridView = !_isGridView;
-                });
-              },
-              icon: Icon(
-                _isGridView ? Icons.list : Icons.grid_view,
-                color: AppColors.appBarText,
+        appBar: _bottomNavIndex == 0
+            ? AppBar(
+                title: const Text(
+                  'Admin - Trip Management',
+                  style: TextStyle(
+                    color: AppColors.appBarText,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 20,
+                  ),
+                ),
+                backgroundColor: AppColors.appBarBackground,
+                elevation: 0,
+                actions: [
+                  // Checkpoints dashboard
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pushNamed(AppRouter.adminCheckpoints),
+                    icon: const Icon(Icons.flag, color: AppColors.appBarText),
+                    tooltip: 'Checkpoints',
+                  ),
+                  // View mode toggle
+                  IconButton(
+                    onPressed: () {
+                      setState(() {
+                        _isGridView = !_isGridView;
+                      });
+                    },
+                    icon: Icon(
+                      _isGridView ? Icons.list : Icons.grid_view,
+                      color: AppColors.appBarText,
+                    ),
+                    tooltip: _isGridView ? 'List View' : 'Grid View',
+                  ),
+                  // Refresh button
+                  IconButton(
+                    onPressed: _refreshTrips,
+                    icon: const Icon(Icons.refresh, color: AppColors.appBarText),
+                    tooltip: 'Refresh',
+                  ),
+                  // Sign out
+                  IconButton(
+                    onPressed: _signOut,
+                    icon: const Icon(Icons.logout, color: AppColors.appBarText),
+                    tooltip: 'Sign Out',
+                  ),
+                ],
+              )
+            : null,
+        body: IndexedStack(
+          index: _bottomNavIndex,
+          children: [
+            // Home (admin trips management)
+            FadeTransition(
+              opacity: _fadeAnimation,
+              child: CustomScrollView(
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Column(
+                      children: [
+                        _buildStatsSection(),
+                        _buildTripTypeTabs(),
+                        const SizedBox(height: 8),
+                        _buildFilterSection(),
+                        const SizedBox(height: 8),
+                      ],
+                    ),
+                  ),
+                  _buildTripsListSliver(),
+                ],
               ),
-              tooltip: _isGridView ? 'List View' : 'Grid View',
             ),
-            // Refresh button
-            IconButton(
-              onPressed: _refreshTrips,
-              icon: const Icon(Icons.refresh, color: AppColors.appBarText),
-              tooltip: 'Refresh',
-            ),
-            // Locations dashboard
-            IconButton(
-              onPressed: () => Navigator.of(context).pushNamed(AppRouter.adminLocations),
-              icon: const Icon(Icons.location_on, color: AppColors.appBarText),
-              tooltip: 'Locations',
-            ),
-            // Sign out
-            IconButton(
-              onPressed: _signOut,
-              icon: const Icon(Icons.logout, color: AppColors.appBarText),
-              tooltip: 'Sign Out',
-            ),
+            // Comments (reuse existing screen)
+            const LocationCommentsScreen(),
           ],
         ),
-        body: FadeTransition(
-          opacity: _fadeAnimation,
-          child: CustomScrollView(
-            slivers: [
-              SliverToBoxAdapter(
-                child: Column(
-                  children: [
-                    _buildStatsSection(),
-                    _buildTripTypeTabs(),
-                    const SizedBox(height: 8),
-                    _buildFilterSection(),
-                    const SizedBox(height: 8),
-                  ],
-                ),
-              ),
-              _buildTripsListSliver(),
-            ],
-          ),
+        bottomNavigationBar: BottomNavigationBar(
+          currentIndex: _bottomNavIndex,
+          onTap: (index) => setState(() => _bottomNavIndex = index),
+          backgroundColor: AppColors.surface,
+          selectedItemColor: AppColors.primary,
+          unselectedItemColor: AppColors.textSecondary,
+          items: const [
+            BottomNavigationBarItem(
+              icon: Icon(Icons.home),
+              label: 'Home',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.location_on),
+              label: 'Comments',
+            ),
+          ],
         ),
       ),
     );
@@ -419,13 +440,7 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
                   color: AppColors.textPrimary,
                 ),
               ),
-              const Spacer(),
-              TextButton.icon(
-                onPressed: () => Navigator.of(context).pushNamed(AppRouter.adminLocations),
-                icon: const Icon(Icons.location_searching, size: 16),
-                label: const Text('See all trip latest location'),
-                style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8)),
-              ),
+              
               if (_searchQuery.isNotEmpty || _selectedFilter != 'all')
                 TextButton.icon(
                   onPressed: () {

@@ -155,7 +155,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                     ),
                     BottomNavigationBarItem(
                       icon: Icon(Icons.notifications),
-                      label: 'Notifications',
+                      label: 'Checkout',
                     ),
                     BottomNavigationBarItem(
                       icon: Icon(Icons.location_on),
