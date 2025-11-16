@@ -5,6 +5,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:overlay_support/overlay_support.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
+import 'dart:async';
 import '../core/colors.dart';
 import '../core/models/trip_model.dart';
 import '../core/models/location_comment_model.dart';
@@ -14,6 +15,7 @@ import '../core/repositories/location_comment_repository.dart';
 import '../cubit/trip_cubit.dart';
 import '../core/repositories/trip_repository.dart';
 import '../widgets/trip_form_widget.dart';
+import '../core/services/places_autocomplete_service.dart';
 import '../widgets/add_comment_dialog.dart';
 import '../cubit/bottom_nav_cubit.dart';
 import '../cubit/notification_cubit.dart';
@@ -39,12 +41,25 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
   EnvironmentInfo? _envInfo;
 
+  // Places autocomplete for dialogs
+  final PlacesAutocompleteService _placesService = PlacesAutocompleteService();
+  Timer? _placesDebounce;
+  String? _placesSessionToken;
+
   @override
   void initState() {
     super.initState();
     _tripCubit = TripCubit(tripRepository: TripRepository());
     _loadTrips();
     _fetchEnvironment();
+    _initializePlaces();
+  }
+
+  Future<void> _initializePlaces() async {
+    try {
+      await _placesService.initialize();
+      _placesSessionToken = DateTime.now().millisecondsSinceEpoch.toString();
+    } catch (_) {}
   }
 
   void _loadTrips() {
@@ -1345,69 +1360,113 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             const Text('End Random Trip'),
           ],
         ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              'Where did you end up?',
-              style: TextStyle(
-                fontSize: 16,
-                fontWeight: FontWeight.bold,
-                color: AppColors.textPrimary,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Please enter the destination where your trip ended.',
-              style: TextStyle(
-                fontSize: 13,
-                color: AppColors.textSecondary,
-              ),
-            ),
-            const SizedBox(height: 16),
-            TextField(
-              controller: destinationController,
-              autofocus: true,
-              textCapitalization: TextCapitalization.words,
-              decoration: InputDecoration(
-                labelText: 'Final Destination',
-                hintText: 'e.g., Mumbai, Goa, etc.',
-                prefixIcon: const Icon(Icons.location_on, color: AppColors.error),
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(12),
-                  borderSide: const BorderSide(color: AppColors.primary, width: 2),
+        content: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'Where did you end up?',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.textPrimary,
                 ),
               ),
-            ),
-            const SizedBox(height: 12),
-            Container(
-              padding: const EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: AppColors.accent.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(color: AppColors.accent.withOpacity(0.3)),
+              const SizedBox(height: 8),
+              Text(
+                'Please enter the destination where your trip ended.',
+                style: TextStyle(
+                  fontSize: 13,
+                  color: AppColors.textSecondary,
+                ),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, color: AppColors.accent, size: 20),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'You can skip this and update it later if needed.',
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: AppColors.textSecondary,
+              const SizedBox(height: 16),
+              Autocomplete<PlaceAutocompletePrediction>(
+                optionsBuilder: (TextEditingValue textEditingValue) async {
+                  if (textEditingValue.text.isEmpty || textEditingValue.text.length < 2) {
+                    return const Iterable<PlaceAutocompletePrediction>.empty();
+                  }
+                  _placesDebounce?.cancel();
+                  final completer = Completer<List<PlaceAutocompletePrediction>>();
+                  _placesDebounce = Timer(const Duration(milliseconds: 500), () async {
+                    final suggestions = await _placesService.getAutocompleteSuggestions(
+                      textEditingValue.text,
+                      sessionToken: _placesSessionToken,
+                    );
+                    completer.complete(suggestions);
+                  });
+                  return completer.future;
+                },
+                displayStringForOption: (PlaceAutocompletePrediction option) => option.description,
+                onSelected: (PlaceAutocompletePrediction selection) {
+                  destinationController.text = selection.description;
+                },
+                fieldViewBuilder: (context, controller, focusNode, onFieldSubmitted) {
+                  if (destinationController.text.isNotEmpty && controller.text.isEmpty) {
+                    controller.text = destinationController.text;
+                  }
+                  return TextField(
+                    controller: controller,
+                    focusNode: focusNode,
+                    autofocus: true,
+                    textCapitalization: TextCapitalization.words,
+                decoration: InputDecoration(
+                  labelText: 'Final Destination',
+                  hintText: 'e.g., Mumbai, Goa, etc.',
+                  prefixIcon: const Icon(Icons.location_on, color: AppColors.error),
+                  suffixIcon: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                          if (controller.text.isNotEmpty)
+                            IconButton(
+                              icon: const Icon(Icons.clear, size: 20),
+                              onPressed: () {
+                                controller.clear();
+                                destinationController.clear();
+                              },
+                            ),
+                    ],
+                  ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      focusedBorder: const OutlineInputBorder(
+                        borderSide: BorderSide(color: AppColors.primary, width: 2),
                       ),
                     ),
-                  ),
-                ],
+                    onChanged: (value) {
+                      destinationController.text = value;
+                    },
+                  );
+                },
               ),
-            ),
-          ],
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: AppColors.accent.withOpacity(0.3)),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.info_outline, color: AppColors.accent, size: 20),
+                    const SizedBox(width: 8),
+                    const Expanded(
+                      child: Text(
+                        'You can skip this and update it later if needed.',
+                        style: TextStyle(
+                          fontSize: 11,
+                          color: AppColors.textSecondary,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
         ),
         actions: [
           TextButton(

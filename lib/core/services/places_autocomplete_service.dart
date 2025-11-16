@@ -15,14 +15,13 @@ class PlacesAutocompleteService {
 
   /// Initialize the service
   Future<void> initialize() async {
+    // Load once; do not throw when missing so we can use fallbacks
     if (_apiKey != null) {
       return;
     }
-    
+
     _apiKey = dotenv.env['GOOGLE_MAPS_API_KEY'] ?? '';
-    if (_apiKey?.isEmpty ?? true) {
-      throw Exception('Google Maps API key not found in .env file');
-    }
+    // If key is missing, we keep it empty and rely on fallback providers
   }
 
   /// Get autocomplete suggestions for a query
@@ -36,54 +35,95 @@ class PlacesAutocompleteService {
 
     try {
       // Ensure service is initialized
-      if (_apiKey == null || _apiKey!.isEmpty) {
+      if (_apiKey == null) {
         await initialize();
       }
 
-      final url = Uri.parse(
-        'https://maps.googleapis.com/maps/api/place/autocomplete/json?'
-        'input=${Uri.encodeComponent(input)}'
-        '&key=$_apiKey'
-        '${sessionToken != null ? '&sessiontoken=$sessionToken' : ''}'
-        '&components=country:in', // Restrict to India, remove if needed
-      );
+      // Prefer Google Places when API key is available
+      if (_apiKey != null && _apiKey!.isNotEmpty) {
+        final url = Uri.parse(
+          'https://maps.googleapis.com/maps/api/place/autocomplete/json?'
+          'input=${Uri.encodeComponent(input)}'
+          '&key=$_apiKey'
+          '${sessionToken != null ? '&sessiontoken=$sessionToken' : ''}'
+          '&components=country:in', // Restrict to India, remove if needed
+        );
 
-      final response = await http.get(url);
-      
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        
-        if (data['status'] == 'OK') {
-          final predictions = (data['predictions'] as List)
-              .map((prediction) => PlaceAutocompletePrediction(
-                    placeId: prediction['place_id'],
-                    description: prediction['description'],
-                    mainText: prediction['structured_formatting']['main_text'],
-                    secondaryText: prediction['structured_formatting']['secondary_text'] ?? '',
-                  ))
-              .toList();
-          
-          return predictions;
-        } else if (data['status'] == 'ZERO_RESULTS') {
-          return [];
+        final response = await http.get(url);
+
+        if (response.statusCode == 200) {
+          final data = json.decode(response.body);
+
+          if (data['status'] == 'OK') {
+            final predictions = (data['predictions'] as List)
+                .map((prediction) => PlaceAutocompletePrediction(
+                      placeId: prediction['place_id'],
+                      description: prediction['description'],
+                      mainText: prediction['structured_formatting']['main_text'],
+                      secondaryText: prediction['structured_formatting']['secondary_text'] ?? '',
+                    ))
+                .toList();
+
+            return predictions;
+          }
+
+          // If Google returns an error or zero results, fall back
+          if (kDebugMode) {
+            final status = (json.decode(response.body) as Map)['status'];
+            print('Places Autocomplete API status: $status, falling back to OSM');
+          }
         } else {
           if (kDebugMode) {
-            print('Places Autocomplete API error: ${data['status']} - ${data['error_message']}');
+            print('HTTP error from Google Places: ${response.statusCode}');
           }
-          return [];
         }
+      }
+
+      // Fallback: OpenStreetMap Nominatim (no API key required)
+      final osmUrl = Uri.parse(
+        'https://nominatim.openstreetmap.org/search?'
+        'format=json'
+        '&q=${Uri.encodeComponent(input)}'
+        '&countrycodes=in'
+        '&limit=10',
+      );
+
+      final osmResponse = await http.get(
+        osmUrl,
+        headers: {
+          // Identify the app per Nominatim usage policy
+          'User-Agent': 'tourmate-app/1.0 (+https://example.com)'
+        },
+      );
+
+      if (osmResponse.statusCode == 200) {
+        final List<dynamic> results = json.decode(osmResponse.body) as List<dynamic>;
+        final predictions = results
+            .map((r) {
+              final description = (r['display_name'] as String?) ?? '';
+              final name = (r['name'] as String?) ?? description.split(',').first.trim();
+              return PlaceAutocompletePrediction(
+                placeId: (r['osm_id']?.toString() ?? r['place_id']?.toString() ?? name),
+                description: description,
+                mainText: name,
+                secondaryText: description.replaceFirst(name, '').trim(),
+              );
+            })
+            .toList();
+        return predictions;
       } else {
         if (kDebugMode) {
-          print('HTTP error: ${response.statusCode}');
+          print('OSM Nominatim HTTP error: ${osmResponse.statusCode}');
         }
-        return [];
       }
     } catch (e) {
       if (kDebugMode) {
         print('Error getting autocomplete suggestions: $e');
       }
-      return [];
     }
+
+    // Default empty list when all providers fail
+    return [];
   }
 
   /// Get place details from place ID
