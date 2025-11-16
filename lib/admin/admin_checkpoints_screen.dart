@@ -36,7 +36,7 @@ class _AdminCheckpointsScreenState extends State<AdminCheckpointsScreen> {
   void _onScroll() {
     if (_scrollController.position.pixels == _scrollController.position.maxScrollExtent) {
       // Load more checkpoints if needed
-      // context.read<AdminCheckpointCubit>().loadMoreCheckpoints();
+      context.read<AdminCheckpointCubit>().loadMoreCheckpoints();
     }
   }
 
@@ -491,7 +491,7 @@ class _AdminCheckpointsScreenState extends State<AdminCheckpointsScreen> {
                   ),
 
                   // Loading footer for pagination
-                  if (state.isLoading && state.checkpoints.isNotEmpty)
+                  if (state.isLoadingMore && state.checkpoints.isNotEmpty)
                     const SliverToBoxAdapter(
                       child: Padding(
                         padding: EdgeInsets.all(16.0),

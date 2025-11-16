@@ -11,6 +11,8 @@ import 'app/app.dart';
 import 'core/services/notification_service.dart';
 import 'core/services/location_comment_notifier_service.dart';
 import 'package:flutter/foundation.dart';
+import 'package:google_maps_flutter_android/google_maps_flutter_android.dart';
+import 'package:google_maps_flutter_platform_interface/google_maps_flutter_platform_interface.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -65,6 +67,33 @@ void main() async {
       badge: true,
       sound: true,
     );
+  }
+  
+  // Optimize and configure Google Maps renderer on Android
+  if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+    final GoogleMapsFlutterPlatform mapsImpl = GoogleMapsFlutterPlatform.instance;
+    if (mapsImpl is GoogleMapsFlutterAndroid) {
+      // Optional overrides from .env
+      final rendererEnv = dotenv.env['MAPS_ANDROID_RENDERER']?.toLowerCase(); // latest | legacy
+      final viewSurfaceEnv = dotenv.env['MAPS_ANDROID_VIEW_SURFACE']?.toLowerCase(); // true | false
+
+      final bool useSurface = viewSurfaceEnv == null
+          ? true
+          : (viewSurfaceEnv == '1' || viewSurfaceEnv == 'true' || viewSurfaceEnv == 'yes');
+      mapsImpl.useAndroidViewSurface = useSurface; // Hybrid composition surface when true
+
+      AndroidMapRenderer target = AndroidMapRenderer.latest;
+      if (rendererEnv == 'legacy') target = AndroidMapRenderer.legacy;
+
+      try {
+        await mapsImpl.initializeWithRenderer(target);
+      } catch (_) {
+        // Fallback to legacy on failures (helps with some Mali/older devices)
+        try {
+          await mapsImpl.initializeWithRenderer(AndroidMapRenderer.legacy);
+        } catch (_) {}
+      }
+    }
   }
   
   runApp(

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:equatable/equatable.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../core/models/checkpoint_model.dart';
 import '../core/repositories/checkpoint_repository.dart';
 
@@ -35,6 +36,8 @@ class AdminCheckpointState extends Equatable {
   final List<CheckpointModel> filteredCheckpoints;
   final String? error;
   final bool isLoading;
+  final bool isLoadingMore;
+  final bool hasMore;
   final String? filterQuery;
   final List<TripCheckpointGroup> activeTripGroups;
 
@@ -43,19 +46,23 @@ class AdminCheckpointState extends Equatable {
     List<CheckpointModel>? filteredCheckpoints,
     this.error,
     this.isLoading = false,
+    this.isLoadingMore = false,
+    this.hasMore = true,
     this.filterQuery,
     this.activeTripGroups = const [],
   }) : filteredCheckpoints = filteredCheckpoints ?? checkpoints;
 
   @override
   List<Object?> get props =>
-      [checkpoints, filteredCheckpoints, error, isLoading, filterQuery, activeTripGroups];
+      [checkpoints, filteredCheckpoints, error, isLoading, isLoadingMore, hasMore, filterQuery, activeTripGroups];
 
   AdminCheckpointState copyWith({
     List<CheckpointModel>? checkpoints,
     List<CheckpointModel>? filteredCheckpoints,
     String? error,
     bool? isLoading,
+    bool? isLoadingMore,
+    bool? hasMore,
     String? filterQuery,
     List<TripCheckpointGroup>? activeTripGroups,
   }) {
@@ -64,6 +71,8 @@ class AdminCheckpointState extends Equatable {
       filteredCheckpoints: filteredCheckpoints ?? this.filteredCheckpoints,
       error: error,
       isLoading: isLoading ?? this.isLoading,
+      isLoadingMore: isLoadingMore ?? this.isLoadingMore,
+      hasMore: hasMore ?? this.hasMore,
       filterQuery: filterQuery ?? this.filterQuery,
       activeTripGroups: activeTripGroups ?? this.activeTripGroups,
     );
@@ -98,6 +107,9 @@ class TripCheckpointGroup extends Equatable {
 class AdminCheckpointCubit extends Cubit<AdminCheckpointState> {
   final CheckpointRepository _checkpointRepository;
   StreamSubscription? _checkpointSubscription;
+  DocumentSnapshot? _lastDoc;
+  bool _hasMore = true;
+  bool _isLoadingMore = false;
 
   AdminCheckpointCubit({required CheckpointRepository checkpointRepository})
       : _checkpointRepository = checkpointRepository,
@@ -109,29 +121,55 @@ class AdminCheckpointCubit extends Cubit<AdminCheckpointState> {
     return super.close();
   }
 
-  // Load checkpoints from Firestore
-  void loadCheckpoints() {
-    emit(state.copyWith(isLoading: true));
-    
+  // Load initial page (paginated)
+  Future<void> loadCheckpoints() async {
+    emit(state.copyWith(isLoading: true, error: null));
     _checkpointSubscription?.cancel();
-    _checkpointSubscription = _checkpointRepository
-        .getAllCheckpoints()
-        .listen(
-          (checkpoints) => _onCheckpointsUpdated(checkpoints),
-          onError: (error) => _onError(error.toString()),
-        );
+    _lastDoc = null;
+    _hasMore = true;
+    try {
+      final snap = await _checkpointRepository.fetchCheckpointsPage(limit: 50);
+      final items = snap.docs.map((d) => CheckpointModel.fromMap(d.data(), d.id)).toList();
+      _lastDoc = snap.docs.isNotEmpty ? snap.docs.last : null;
+      _hasMore = snap.docs.length == 50;
+      emit(state.copyWith(
+        checkpoints: items,
+        filteredCheckpoints: _applyFilter(items, state.filterQuery),
+        activeTripGroups: _buildActiveTripGroups(items),
+        isLoading: false,
+        hasMore: _hasMore,
+      ));
+    } catch (e) {
+      _onError(e.toString());
+    }
   }
 
-  // Handle updated checkpoints from Firestore
-  void _onCheckpointsUpdated(List<CheckpointModel> checkpoints) {
-    emit(state.copyWith(
-      checkpoints: checkpoints,
-      filteredCheckpoints: _applyFilter(checkpoints, state.filterQuery),
-      activeTripGroups: _buildActiveTripGroups(checkpoints),
-      isLoading: false,
-      error: null,
-    ));
+  // Load additional page
+  Future<void> loadMoreCheckpoints() async {
+    if (_isLoadingMore || !_hasMore || state.isLoading) return;
+    _isLoadingMore = true;
+    emit(state.copyWith(isLoadingMore: true));
+    try {
+      final snap = await _checkpointRepository.fetchCheckpointsPage(limit: 50, startAfter: _lastDoc);
+      final more = snap.docs.map((d) => CheckpointModel.fromMap(d.data(), d.id)).toList();
+      final combined = List<CheckpointModel>.from(state.checkpoints)..addAll(more);
+      _lastDoc = snap.docs.isNotEmpty ? snap.docs.last : _lastDoc;
+      _hasMore = snap.docs.length == 50;
+      emit(state.copyWith(
+        checkpoints: combined,
+        filteredCheckpoints: _applyFilter(combined, state.filterQuery),
+        activeTripGroups: _buildActiveTripGroups(combined),
+        isLoadingMore: false,
+        hasMore: _hasMore,
+      ));
+    } catch (e) {
+      emit(state.copyWith(isLoadingMore: false));
+      _onError(e.toString());
+    } finally {
+      _isLoadingMore = false;
+    }
   }
+
 
   // Handle errors
   void _onError(String error) {

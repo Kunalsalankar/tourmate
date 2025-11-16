@@ -43,6 +43,23 @@ class CheckpointRepository {
             .toList());
   }
 
+  // Get checkpoints for a specific user and trip (client-side ordered by time)
+  Stream<List<CheckpointModel>> getTripCheckpointsForUser(
+      String userId, String tripId) {
+    return _firestore
+        .collection(collectionName)
+        .where('userId', isEqualTo: userId)
+        .where('tripId', isEqualTo: tripId)
+        .snapshots()
+        .map((snapshot) {
+          final list = snapshot.docs
+              .map((doc) => CheckpointModel.fromMap(doc.data(), doc.id))
+              .toList();
+          list.sort((a, b) => a.timestamp.compareTo(b.timestamp));
+          return list;
+        });
+  }
+
   // Get a single checkpoint by ID
   Future<CheckpointModel?> getCheckpointById(String id) async {
     try {
@@ -77,5 +94,19 @@ class CheckpointRepository {
         .map((snapshot) => snapshot.docs
             .map((doc) => CheckpointModel.fromMap(doc.data(), doc.id))
             .toList());
+  }
+
+  Future<QuerySnapshot<Map<String, dynamic>>> fetchCheckpointsPage({
+    int limit = 50,
+    DocumentSnapshot? startAfter,
+  }) {
+    Query<Map<String, dynamic>> query = _firestore
+        .collection(collectionName)
+        .orderBy('timestamp', descending: true)
+        .limit(limit);
+    if (startAfter != null) {
+      query = query.startAfterDocument(startAfter);
+    }
+    return query.get();
   }
 }

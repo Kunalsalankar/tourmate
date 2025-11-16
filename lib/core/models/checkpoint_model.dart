@@ -51,6 +51,30 @@ class CheckpointModel {
 
   /// Create CheckpointModel from Firestore document
   factory CheckpointModel.fromMap(Map<String, dynamic> map, String documentId) {
+    final ts = map['timestamp'];
+    DateTime tsDate;
+    if (ts is Timestamp) {
+      tsDate = ts.toDate();
+    } else if (ts is int) {
+      tsDate = DateTime.fromMillisecondsSinceEpoch(ts);
+    } else if (ts is String) {
+      tsDate = DateTime.tryParse(ts) ?? DateTime.now();
+    } else {
+      tsDate = DateTime.now();
+    }
+
+    final ca = map['createdAt'];
+    DateTime caDate;
+    if (ca is Timestamp) {
+      caDate = ca.toDate();
+    } else if (ca is int) {
+      caDate = DateTime.fromMillisecondsSinceEpoch(ca);
+    } else if (ca is String) {
+      caDate = DateTime.tryParse(ca) ?? tsDate;
+    } else {
+      caDate = tsDate;
+    }
+
     return CheckpointModel(
       id: documentId,
       userId: map['userId'] ?? '',
@@ -58,8 +82,8 @@ class CheckpointModel {
       title: map['title'] ?? 'Checkpoint',
       latitude: (map['latitude'] as num).toDouble(),
       longitude: (map['longitude'] as num).toDouble(),
-      timestamp: (map['timestamp'] as Timestamp).toDate(),
-      createdAt: (map['createdAt'] as Timestamp).toDate(),
+      timestamp: tsDate,
+      createdAt: caDate,
       tripId: map['tripId'] as String?,
       tripNumber: map['tripNumber'] as String?,
       tripDestination: map['tripDestination'] as String?,

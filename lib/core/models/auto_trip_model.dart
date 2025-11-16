@@ -60,6 +60,9 @@ class AutoTripModel {
   final double averageSpeed; // in m/s
   final double maxSpeed; // in m/s
   final List<LocationPoint> routePoints;
+  // Human-readable addresses
+  final String? originAddress;
+  final String? destinationAddress;
   
   // Trip status
   final AutoTripStatus status;
@@ -96,6 +99,8 @@ class AutoTripModel {
     this.notes,
     required this.createdAt,
     required this.updatedAt,
+    this.originAddress,
+    this.destinationAddress,
   });
 
   /// Calculate trip duration in minutes
@@ -134,6 +139,8 @@ class AutoTripModel {
       'notes': notes,
       'createdAt': Timestamp.fromDate(createdAt),
       'updatedAt': Timestamp.fromDate(updatedAt),
+      'originAddress': originAddress,
+      'destinationAddress': destinationAddress,
     };
   }
 
@@ -170,6 +177,8 @@ class AutoTripModel {
       notes: map['notes'] as String?,
       createdAt: (map['createdAt'] as Timestamp).toDate(),
       updatedAt: (map['updatedAt'] as Timestamp).toDate(),
+      originAddress: map['originAddress'] as String?,
+      destinationAddress: map['destinationAddress'] as String?,
     );
   }
 
@@ -194,6 +203,8 @@ class AutoTripModel {
     String? notes,
     DateTime? createdAt,
     DateTime? updatedAt,
+    String? originAddress,
+    String? destinationAddress,
   }) {
     return AutoTripModel(
       id: id ?? this.id,
@@ -215,6 +226,8 @@ class AutoTripModel {
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
+      originAddress: originAddress ?? this.originAddress,
+      destinationAddress: destinationAddress ?? this.destinationAddress,
     );
   }
 

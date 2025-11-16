@@ -9,6 +9,7 @@ import '../core/colors.dart';
 import '../core/models/trip_model.dart';
 import '../core/models/location_comment_model.dart';
 import '../core/services/location_service.dart';
+import '../core/services/environment_service.dart';
 import '../core/repositories/location_comment_repository.dart';
 import '../cubit/trip_cubit.dart';
 import '../core/repositories/trip_repository.dart';
@@ -19,6 +20,7 @@ import '../cubit/notification_cubit.dart';
 import '../cubit/location_comment_cubit.dart';
 import 'location_comments_screen.dart';
 import '../presentation/screens/notification_screen.dart';
+import 'trip_map_screen.dart';
 
 /// User Home Screen with trip creation and management functionality
 /// This screen provides the main interface for users to create, view, and manage their trips
@@ -35,11 +37,14 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   int _currentTabIndex = 0;
   final List<TripType> _tripTypes = TripType.values;
 
+  EnvironmentInfo? _envInfo;
+
   @override
   void initState() {
     super.initState();
     _tripCubit = TripCubit(tripRepository: TripRepository());
     _loadTrips();
+    _fetchEnvironment();
   }
 
   void _loadTrips() {
@@ -48,6 +53,34 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     } else {
       _tripCubit.getTripsByType(_tripTypes[_currentTabIndex - 1]);
     }
+  }
+
+  Future<void> _fetchEnvironment() async {
+    if (!mounted) return;
+    final pos = await LocationService().getCurrentPosition();
+    if (!mounted) return;
+    if (pos == null) {
+      return;
+    }
+    final info = await EnvironmentService().fetch(
+      latitude: pos.latitude,
+      longitude: pos.longitude,
+    );
+    if (!mounted) return;
+    setState(() {
+      _envInfo = info;
+    });
+  }
+
+  Color _aqiColor(String? category) {
+    final c = (category ?? '').toLowerCase();
+    if (c.contains('good')) return Colors.green;
+    if (c.contains('moderate')) return Colors.yellow.shade700;
+    if (c.contains('sensitive')) return Colors.orange;
+    if (c.contains('unhealthy') && !c.contains('very')) return Colors.red;
+    if (c.contains('very')) return Colors.purple;
+    if (c.contains('hazard') || c.contains('severe')) return Colors.brown;
+    return Colors.grey;
   }
 
   @override
@@ -68,7 +101,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
       child: BlocBuilder<BottomNavCubit, int>(
         builder: (context, selectedIndex) {
           return BlocListener<NotificationCubit, NotificationState>(
-
               listener: (context, state) {
                 if (state.message != null && state.message!.isNotEmpty) {
                   showSimpleNotification(
@@ -94,6 +126,66 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                   backgroundColor: AppColors.appBarBackground,
                   elevation: 0,
                   actions: [
+                    if (_envInfo != null && _envInfo!.temperatureC != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: InkWell(
+                          onTap: _fetchEnvironment,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: Colors.blue.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: Colors.blue.withValues(alpha: 0.4)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.wb_sunny, size: 14, color: Colors.blue),
+                                const SizedBox(width: 4),
+                                Text(
+                                  '${_envInfo!.temperatureC!.toStringAsFixed(0)}°C',
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.blue,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    if (_envInfo != null && _envInfo!.aqi != null)
+                      Padding(
+                        padding: const EdgeInsets.only(right: 8),
+                        child: InkWell(
+                          onTap: _fetchEnvironment,
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: _aqiColor(_envInfo!.aqiCategory).withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: _aqiColor(_envInfo!.aqiCategory).withValues(alpha: 0.4)),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.air, size: 14, color: _aqiColor(_envInfo!.aqiCategory)),
+                                const SizedBox(width: 4),
+                                Text(
+                                  'AQI ${_envInfo!.aqi}',
+                                  style: TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: _aqiColor(_envInfo!.aqiCategory),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
                     IconButton(
                       onPressed: _signOut,
                       icon: const Icon(
@@ -164,8 +256,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                   ],
                 ),
               ),
-            
-          );
+            );
         },
       ),
     );
@@ -202,7 +293,6 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               color: AppColors.textOnPrimary.withValues(alpha: 0.8),
             ),
           ),
-        
           const SizedBox(height: 16),
           ElevatedButton.icon(
             onPressed: () {
@@ -219,6 +309,69 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
           ),
+          const SizedBox(height: 12),
+          if (_envInfo != null)
+            Row(
+              children: [
+                if (_envInfo!.temperatureC != null)
+                  InkWell(
+                    onTap: _fetchEnvironment,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.blue.withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.blue.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.wb_sunny, size: 16, color: Colors.blue),
+                          const SizedBox(width: 6),
+                          Text(
+                            '${_envInfo!.temperatureC!.toStringAsFixed(0)}°C'
+                            '${_envInfo!.weatherDescription != null ? ' • ${_envInfo!.weatherDescription}' : ''}',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: Colors.blue,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                if (_envInfo!.temperatureC != null) const SizedBox(width: 8),
+                if (_envInfo!.aqi != null)
+                  InkWell(
+                    onTap: _fetchEnvironment,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: _aqiColor(_envInfo!.aqiCategory).withValues(alpha: 0.12),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: _aqiColor(_envInfo!.aqiCategory).withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.air, size: 16, color: _aqiColor(_envInfo!.aqiCategory)),
+                          const SizedBox(width: 6),
+                          Text(
+                            'AQI ${_envInfo!.aqi}'
+                            '${_envInfo!.aqiCategory != null ? ' • ${_envInfo!.aqiCategory}' : ''}',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600,
+                              color: _aqiColor(_envInfo!.aqiCategory),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+              ],
+            ),
         ],
       ),
     );
@@ -422,9 +575,9 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                   const Icon(Icons.card_travel, size: 64, color: Colors.grey),
                   const SizedBox(height: 16),
                   Text(
-                    _currentTabIndex == 0 
-                      ? 'No trips found' 
-                      : 'No ${_tripTypes[_currentTabIndex - 1].toString().split('.').last} trips',
+                    _currentTabIndex == 0
+                        ? 'No trips found'
+                        : 'No ${_tripTypes[_currentTabIndex - 1].toString().split('.').last} trips',
                     style: const TextStyle(fontSize: 16, color: Colors.grey),
                   ),
                   if (_currentTabIndex == 0)
@@ -449,12 +602,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
     );
   }
 
-
   Widget _buildTripCard(TripModel trip) {
     // Determine trip type for styling
     Color typeColor;
     IconData typeIcon;
-    
+
     if (trip.time.isAfter(DateTime.now().add(const Duration(days: 1)))) {
       typeColor = Colors.blue;
       typeIcon = Icons.upcoming;
@@ -502,9 +654,9 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                           children: [
                             Expanded(
                               child: Text(
-                                trip.destination == 'Unknown' 
-                                  ? '${trip.origin} → ???'
-                                  : '${trip.origin} → ${trip.destination}',
+                                trip.destination == 'Unknown'
+                                    ? '${trip.origin} → ???'
+                                    : '${trip.origin} → ${trip.destination}',
                                 style: const TextStyle(
                                   fontSize: 16,
                                   fontWeight: FontWeight.bold,
@@ -564,7 +716,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                     ),
                   ),
                   Text(
-                    '${trip.accompanyingTravellers.length + 1} ${trip.accompanyingTravellers.length == 0 ? 'Person' : 'People'}' ,
+                    '${trip.accompanyingTravellers.length + 1} ${trip.accompanyingTravellers.length == 0 ? 'Person' : 'People'}',
                     style: const TextStyle(fontSize: 12, color: Colors.grey),
                   ),
                 ],
@@ -640,7 +792,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
 
   Widget _buildTripDetailsDialog(TripModel trip) {
     final user = FirebaseAuth.instance.currentUser;
-    
+
     return Dialog(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
       child: Container(
@@ -717,7 +869,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                 ],
               ),
             ),
-            
+
             // Content
             Expanded(
               child: SingleChildScrollView(
@@ -741,11 +893,11 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                       trip.destination,
                       AppColors.error,
                     ),
-                    
+
                     const SizedBox(height: 20),
                     const Divider(),
                     const SizedBox(height: 20),
-                    
+
                     // Time Section
                     _buildSectionTitle('Time Details', Icons.schedule),
                     const SizedBox(height: 12),
@@ -771,7 +923,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                         AppColors.accent,
                       ),
                     ],
-                    
+
                     // Activities Section
                     if (trip.activities.isNotEmpty) ...[
                       const SizedBox(height: 20),
@@ -804,7 +956,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                         }).toList(),
                       ),
                     ],
-                    
+
                     // Travellers Section
                     if (trip.accompanyingTravellers.isNotEmpty) ...[
                       const SizedBox(height: 20),
@@ -861,7 +1013,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                         );
                       }),
                     ],
-                    
+
                     // Comments Section
                     if (trip.id != null && user != null) ...[
                       const SizedBox(height: 20),
@@ -875,7 +1027,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                 ),
               ),
             ),
-            
+
             // Action Buttons
             Container(
               padding: const EdgeInsets.all(16),
@@ -908,6 +1060,34 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                     ),
                   ),
                   const SizedBox(width: 12),
+                  if (trip.tripType == TripType.past && trip.id != null) ...[
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Navigator.of(context).push(
+                            MaterialPageRoute(
+                              builder: (_) => TripMapScreen(
+                                tripId: trip.id!,
+                                tripTitle: trip.tripNumber,
+                              ),
+                            ),
+                          );
+                        },
+                        icon: const Icon(Icons.map, size: 18),
+                        label: const Text('View Map'),
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: AppColors.textOnPrimary,
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                  ],
                   Expanded(
                     child: ElevatedButton(
                       onPressed: () {

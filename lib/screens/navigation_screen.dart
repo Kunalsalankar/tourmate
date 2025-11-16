@@ -12,6 +12,7 @@ import '../cubit/maps_navigation_cubit.dart';
 import '../core/services/route_tracking_service.dart';
 import '../core/services/connectivity_service.dart';
 import '../core/services/places_autocomplete_service.dart';
+import '../core/services/environment_service.dart';
 
 class NavigationScreen extends StatefulWidget {
   final String? initialOrigin;
@@ -63,6 +64,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
   Timer? _originSearchDebounce;
   Timer? _destinationSearchDebounce;
 
+  // Environment (Weather + Air Quality)
+  EnvironmentInfo? _envInfo;
+
   @override
   void initState() {
     super.initState();
@@ -97,6 +101,9 @@ class _NavigationScreenState extends State<NavigationScreen> {
         _searchDestination(widget.initialDestination!);
       });
     }
+
+    // Fetch environment info
+    _fetchEnvironment();
   }
 
   @override
@@ -134,6 +141,27 @@ class _NavigationScreenState extends State<NavigationScreen> {
     );
   }
 
+  Future<void> _fetchEnvironment() async {
+    try {
+      Position? position;
+      try {
+        position = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 8),
+        );
+      } catch (_) {}
+      position ??= await Geolocator.getLastKnownPosition();
+      if (!mounted || position == null) return;
+
+      final info = await EnvironmentService().fetch(
+        latitude: position.latitude,
+        longitude: position.longitude,
+      );
+      if (!mounted) return;
+      setState(() => _envInfo = info);
+    } catch (_) {}
+  }
+
   // Last map position for tracking camera movements
   CameraPosition? _lastMapPosition;
 
@@ -141,10 +169,73 @@ class _NavigationScreenState extends State<NavigationScreen> {
   Widget build(BuildContext context) {
     print('[DEBUG] NavigationScreen build');
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
         title: const Text('Navigation'),
         backgroundColor: AppColors.primary,
         foregroundColor: Colors.white,
+        actions: [
+          if (_envInfo != null && _envInfo!.temperatureC != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: InkWell(
+                onTap: _fetchEnvironment,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.wb_sunny, size: 14, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Text(
+                        '${_envInfo!.temperatureC!.toStringAsFixed(0)}°C',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          if (_envInfo != null && _envInfo!.aqi != null)
+            Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: InkWell(
+                onTap: _fetchEnvironment,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.15),
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: Colors.white24),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      const Icon(Icons.air, size: 14, color: Colors.white),
+                      const SizedBox(width: 4),
+                      Text(
+                        'AQI ${_envInfo!.aqi}',
+                        style: const TextStyle(
+                          fontSize: 11,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
       body: BlocConsumer<MapsNavigationCubit, MapsNavigationState>(
         listener: (context, state) {

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:collection/collection.dart';
 import 'package:geolocator/geolocator.dart';
@@ -7,6 +8,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:uuid/uuid.dart';
+import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../core/models/checkpoint_model.dart';
 
@@ -127,6 +129,8 @@ class NotificationCubit extends Cubit<NotificationState> {
   Position? _lastKnownPosition;
   Map<String, dynamic>? _activeTripData;
   bool _activeTripMissingNotified = false;
+  bool _isWritingCheckpoint = false;
+  String? _lastActiveTripId;
 
   NotificationCubit() : super(NotificationState()) {
     _initializeLocationService();
@@ -170,8 +174,8 @@ class NotificationCubit extends Cubit<NotificationState> {
       // Start listening to location updates
       _positionStream = Geolocator.getPositionStream(
         locationSettings: const LocationSettings(
-          accuracy: LocationAccuracy.high,
-          distanceFilter: 10, // Update only if the device moves 10 meters
+          accuracy: LocationAccuracy.medium,
+          distanceFilter: 30, // Reduce update frequency for performance
         ),
       ).listen((Position position) {
         _lastKnownPosition = position;
@@ -233,7 +237,10 @@ class NotificationCubit extends Cubit<NotificationState> {
 
   Future<void> _addCheckpoint() async {
     if (isClosed) return;
+    if (_isWritingCheckpoint) return;
+    _isWritingCheckpoint = true;
     try {
+      debugPrint('[Checkpoint] Attempting to add checkpoint...');
       if (_activeTripData == null) {
         await _loadActiveTrip();
       }
@@ -250,7 +257,25 @@ class NotificationCubit extends Cubit<NotificationState> {
       _activeTripMissingNotified = false;
 
       _checkpointCounter++;
-      
+
+      Position? fresh;
+      try {
+        fresh = await Geolocator.getCurrentPosition(
+          desiredAccuracy: LocationAccuracy.high,
+          timeLimit: const Duration(seconds: 3),
+        );
+      } catch (_) {}
+      if (fresh == null) {
+        try {
+          fresh = await Geolocator.getLastKnownPosition();
+        } catch (_) {}
+      }
+      _lastKnownPosition = fresh ?? _lastKnownPosition;
+      if (_lastKnownPosition == null) {
+        debugPrint('[Checkpoint] Skipped: no location fix available');
+        return;
+      }
+
       final userId = FirebaseAuth.instance.currentUser?.uid ?? 'unknown';
       final userName = FirebaseAuth.instance.currentUser?.displayName ?? 'Unknown User';
       final checkpointId = const Uuid().v4();
@@ -263,8 +288,8 @@ class NotificationCubit extends Cubit<NotificationState> {
         userName: userName,
         title: 'Checkpoint #$_checkpointCounter',
         timestamp: now,
-        latitude: _lastKnownPosition?.latitude ?? 0.0,
-        longitude: _lastKnownPosition?.longitude ?? 0.0,
+        latitude: _lastKnownPosition!.latitude,
+        longitude: _lastKnownPosition!.longitude,
         tripId: _activeTripData?['id'] as String?,
         tripNumber: _activeTripData?['number'] as String?,
         tripDestination: _activeTripData?['destination'] as String?,
@@ -272,11 +297,18 @@ class NotificationCubit extends Cubit<NotificationState> {
         tripStatus: _activeTripData?['status'] as String?,
       );
 
-      // Save to Firestore
+      // Connectivity info (for diagnostics). Firestore can still queue offline.
+      final connectivity = await Connectivity().checkConnectivity();
+      debugPrint('[Checkpoint] Connectivity: $connectivity');
+
+      // Save to Firestore with a timeout guard
+      debugPrint('[Checkpoint] Writing doc $checkpointId at ${_lastKnownPosition!.latitude}, ${_lastKnownPosition!.longitude}');
       await FirebaseFirestore.instance
           .collection('checkpoints')
           .doc(checkpointId)
-          .set(newCheckpoint.toMap());
+          .set(newCheckpoint.toMap())
+          .timeout(const Duration(seconds: 8));
+      debugPrint('[Checkpoint] Write success: $checkpointId');
           
       // Update local state with a simplified checkpoint
       final updatedCheckpoints = List<Checkpoint>.from(state.checkpoints)
@@ -299,6 +331,9 @@ class NotificationCubit extends Cubit<NotificationState> {
       if (!isClosed) {
         emit(state.copyWith(error: null));
       }
+    }
+    finally {
+      _isWritingCheckpoint = false;
     }
   }
 
@@ -326,6 +361,7 @@ class NotificationCubit extends Cubit<NotificationState> {
 
       if (query.docs.isEmpty) {
         _activeTripData = null;
+        _lastActiveTripId = null;
         emit(state.copyWith(
           activeTripId: null,
           activeTripTitle: null,
@@ -356,6 +392,9 @@ class NotificationCubit extends Cubit<NotificationState> {
         'scheduledFor': scheduled,
       };
 
+      final firstActivation = (_lastActiveTripId != doc.id);
+      _lastActiveTripId = doc.id;
+
       emit(state.copyWith(
         activeTripId: doc.id,
         activeTripTitle: tripTitle,
@@ -363,6 +402,10 @@ class NotificationCubit extends Cubit<NotificationState> {
         activeTripMode: data['mode'] as String?,
       ));
       _activeTripMissingNotified = false;
+
+      if (firstActivation) {
+        Future.microtask(() => _addCheckpoint());
+      }
     } catch (e) {
       if (isClosed) return;
       emit(state.copyWith(

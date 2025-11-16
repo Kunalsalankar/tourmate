@@ -1,40 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:intl/intl.dart';
-import 'package:geolocator/geolocator.dart';
 import '../../../cubit/notification_cubit.dart';
 import '../../../core/colors.dart';
+import '../../user/trip_map_screen.dart';
 
 class NotificationScreen extends StatelessWidget {
   const NotificationScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return BlocProvider(
-      create: (context) => NotificationCubit(),
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('Notifications'),
-          backgroundColor: AppColors.primary,
-          foregroundColor: AppColors.textOnPrimary,
-          elevation: 0,
-          actions: [
-            IconButton(
-              icon: const Icon(Icons.refresh),
-              onPressed: () {
-                // Refresh the checkpoints
-                final cubit = context.read<NotificationCubit>();
-                cubit.add(
-                const AddCheckpointEvent(),
-              );
-                cubit.refreshActiveTrip();
-                cubit.clearError();
-              },
-              tooltip: 'Refresh',
-            ),
-          ],
-        ),
-        body: BlocBuilder<NotificationCubit, NotificationState>(
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('Notifications'),
+        backgroundColor: AppColors.primary,
+        foregroundColor: AppColors.textOnPrimary,
+        elevation: 0,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.refresh),
+            onPressed: () {
+              // Refresh the checkpoints
+              final cubit = context.read<NotificationCubit>();
+              cubit.add(
+              const AddCheckpointEvent(),
+            );
+              cubit.refreshActiveTrip();
+              cubit.clearError();
+            },
+            tooltip: 'Refresh',
+          ),
+        ],
+      ),
+      body: BlocBuilder<NotificationCubit, NotificationState>(
           builder: (context, state) {
             // Show error message if any
             if (state.error != null && state.error!.isNotEmpty) {
@@ -69,6 +67,29 @@ class NotificationScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       _buildTripStatus(state),
+                      if (state.activeTripId != null) ...[
+                        const SizedBox(height: 8),
+                        ElevatedButton.icon(
+                          onPressed: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute(
+                                builder: (_) => TripMapScreen(
+                                  tripId: state.activeTripId!,
+                                  tripTitle: state.activeTripTitle,
+                                ),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.buttonPrimary,
+                          ),
+                          icon: const Icon(Icons.map, color: AppColors.textOnPrimary),
+                          label: const Text(
+                            'View Map',
+                            style: TextStyle(color: AppColors.textOnPrimary),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
@@ -107,7 +128,7 @@ class NotificationScreen extends StatelessWidget {
                         Padding(
                           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
                           child: Text(
-                            'Checkpoints are being recorded every 10 seconds',
+                            'Checkpoints are being recorded every 30 seconds',
                             style: TextStyle(
                               color: AppColors.primary,
                               fontWeight: FontWeight.w500,
@@ -152,7 +173,6 @@ class NotificationScreen extends StatelessWidget {
               ],
             );
           },
-        ),
       ),
     );
   }
