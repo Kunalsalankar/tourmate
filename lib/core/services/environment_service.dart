@@ -142,9 +142,23 @@ class EnvironmentService {
         if (kDebugMode) {
           debugPrint('[EnvironmentService] AQI API ${aqiResp.statusCode}: ${aqiResp.body}');
         }
+        if (aqi == null || aqiCat == null) {
+          final fallback = await _fetchAqiFromOpenAQ(latitude, longitude);
+          if (fallback != null) {
+            aqi = fallback.$1;
+            aqiCat = fallback.$2;
+          }
+        }
       }
     } catch (e) {
       if (kDebugMode) debugPrint('[EnvironmentService] AQI fetch error: $e');
+      if (aqi == null || aqiCat == null) {
+        final fallback = await _fetchAqiFromOpenAQ(latitude, longitude);
+        if (fallback != null) {
+          aqi = fallback.$1;
+          aqiCat = fallback.$2;
+        }
+      }
     }
 
     return EnvironmentInfo(
@@ -154,5 +168,64 @@ class EnvironmentService {
       aqi: aqi,
       aqiCategory: aqiCat,
     );
+  }
+
+  Future<(int, String)?> _fetchAqiFromOpenAQ(double latitude, double longitude) async {
+    try {
+      final uri = Uri.parse('https://api.openaq.org/v2/latest?coordinates=${latitude.toStringAsFixed(6)},${longitude.toStringAsFixed(6)}&limit=1');
+      final resp = await http.get(uri).timeout(const Duration(seconds: 5));
+      if (resp.statusCode != 200) return null;
+      final data = json.decode(resp.body) as Map<String, dynamic>;
+      final results = (data['results'] as List?) ?? const [];
+      if (results.isEmpty) return null;
+      final measurements = (results.first['measurements'] as List?) ?? const [];
+      double? pm25;
+      for (final m in measurements) {
+        final mm = m as Map<String, dynamic>;
+        final p = (mm['parameter'] ?? mm['parameterCode'] ?? '').toString().toLowerCase();
+        if (p == 'pm25' || p.contains('pm2.5')) {
+          pm25 = (mm['value'] as num?)?.toDouble();
+          break;
+        }
+      }
+      if (pm25 == null) return null;
+      final aqiVal = _aqiFromPm25(pm25);
+      final cat = _aqiCategoryFromValue(aqiVal);
+      return (aqiVal, cat);
+    } catch (_) {
+      return null;
+    }
+  }
+
+  int _aqiFromPm25(double pm) {
+    final List<List<double>> bp = [
+      [0.0, 12.0, 0, 50],
+      [12.1, 35.4, 51, 100],
+      [35.5, 55.4, 101, 150],
+      [55.5, 150.4, 151, 200],
+      [150.5, 250.4, 201, 300],
+      [250.5, 350.4, 301, 400],
+      [350.5, 500.4, 401, 500],
+    ];
+    for (final b in bp) {
+      final cLo = b[0];
+      final cHi = b[1];
+      final iLo = b[2];
+      final iHi = b[3];
+      if (pm >= cLo && pm <= cHi) {
+        final aqi = ((iHi - iLo) / (cHi - cLo)) * (pm - cLo) + iLo;
+        return aqi.round();
+      }
+    }
+    return 500;
+  }
+
+  String _aqiCategoryFromValue(int aqi) {
+    if (aqi <= 50) return 'Good';
+    if (aqi <= 100) return 'Moderate';
+    if (aqi <= 150) return 'Unhealthy for Sensitive Groups';
+    if (aqi <= 200) return 'Unhealthy';
+    if (aqi <= 300) return 'Very Unhealthy';
+    return 'Hazardous';
   }
 }

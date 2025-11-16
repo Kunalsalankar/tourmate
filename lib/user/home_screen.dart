@@ -23,6 +23,8 @@ import '../cubit/location_comment_cubit.dart';
 import 'location_comments_screen.dart';
 import '../presentation/screens/notification_screen.dart';
 import 'trip_map_screen.dart';
+import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../GEMIN_API/trip_planner_chat.dart';
 
 /// User Home Screen with trip creation and management functionality
 /// This screen provides the main interface for users to create, view, and manage their trips
@@ -141,6 +143,14 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                   backgroundColor: AppColors.appBarBackground,
                   elevation: 0,
                   actions: [
+                    IconButton(
+                      onPressed: _openTravelAssistant,
+                      icon: const Icon(
+                        Icons.smart_toy,
+                        color: AppColors.appBarText,
+                      ),
+                      tooltip: 'Travel Assistant',
+                    ),
                     if (_envInfo != null && _envInfo!.temperatureC != null)
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
@@ -273,6 +283,22 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               ),
             );
         },
+      ),
+    );
+  }
+
+  void _openTravelAssistant() {
+    final key = dotenv.env['GEMINI_API_KEY'] ?? '';
+    if (key.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Gemini API key is missing. Set GEMINI_API_KEY in .env')),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => TripPlannerChat(apiKey: key),
       ),
     );
   }
