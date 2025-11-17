@@ -188,21 +188,21 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: _aqiColor(_envInfo!.aqiCategory).withValues(alpha: 0.12),
+                              color: Colors.white.withValues(alpha: 0.18),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: _aqiColor(_envInfo!.aqiCategory).withValues(alpha: 0.4)),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                Icon(Icons.air, size: 14, color: _aqiColor(_envInfo!.aqiCategory)),
+                                const Icon(Icons.air, size: 14, color: Colors.white),
                                 const SizedBox(width: 4),
                                 Text(
                                   'AQI ${_envInfo!.aqi}',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: _aqiColor(_envInfo!.aqiCategory),
+                                    color: Colors.white,
                                   ),
                                 ),
                               ],
@@ -381,14 +381,14 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: _aqiColor(_envInfo!.aqiCategory).withValues(alpha: 0.12),
+                        color: Colors.white.withValues(alpha: 0.18),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: _aqiColor(_envInfo!.aqiCategory).withValues(alpha: 0.4)),
+                        border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.air, size: 16, color: _aqiColor(_envInfo!.aqiCategory)),
+                          const Icon(Icons.air, size: 16, color: Colors.white),
                           const SizedBox(width: 6),
                           Text(
                             'AQI ${_envInfo!.aqi}'
@@ -396,7 +396,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                             style: TextStyle(
                               fontSize: 13,
                               fontWeight: FontWeight.w600,
-                              color: _aqiColor(_envInfo!.aqiCategory),
+                              color: Colors.white,
                             ),
                           ),
                         ],

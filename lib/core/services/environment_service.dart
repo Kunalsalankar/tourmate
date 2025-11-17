@@ -86,9 +86,17 @@ class EnvironmentService {
         if (kDebugMode) {
           debugPrint('[EnvironmentService] Weather API ${weatherResp.statusCode}: ${weatherResp.body}');
         }
+        final fb = await _fetchWeatherFromOpenMeteo(latitude, longitude);
+        tempC ??= fb.$1;
+        weatherDesc ??= fb.$2;
+        iconUri ??= fb.$3;
       }
     } catch (e) {
       if (kDebugMode) debugPrint('[EnvironmentService] Weather fetch error: $e');
+      final fb = await _fetchWeatherFromOpenMeteo(latitude, longitude);
+      tempC ??= fb.$1;
+      weatherDesc ??= fb.$2;
+      iconUri ??= fb.$3;
     }
 
     try {
@@ -227,5 +235,35 @@ class EnvironmentService {
     if (aqi <= 200) return 'Unhealthy';
     if (aqi <= 300) return 'Very Unhealthy';
     return 'Hazardous';
+  }
+  Future<(double?, String?, String?)> _fetchWeatherFromOpenMeteo(double latitude, double longitude) async {
+    try {
+      final uri = Uri.parse('https://api.open-meteo.com/v1/forecast?latitude=${latitude.toStringAsFixed(6)}&longitude=${longitude.toStringAsFixed(6)}&current_weather=true');
+      final resp = await http.get(uri).timeout(const Duration(seconds: 5));
+      if (resp.statusCode != 200) return (null, null, null);
+      final data = json.decode(resp.body) as Map<String, dynamic>;
+      final cw = data['current_weather'] as Map<String, dynamic>?;
+      final temp = (cw?['temperature'] as num?)?.toDouble();
+      final code = (cw?['weathercode'] as num?)?.toInt();
+      final desc = _mapOpenMeteoCode(code);
+      return (temp, desc, null);
+    } catch (_) {
+      return (null, null, null);
+    }
+  }
+
+  String? _mapOpenMeteoCode(int? code) {
+    if (code == null) return null;
+    if (code == 0) return 'Clear sky';
+    if (code == 1 || code == 2 || code == 3) return 'Partly cloudy';
+    if (code == 45 || code == 48) return 'Fog';
+    if (code == 51 || code == 53 || code == 55) return 'Drizzle';
+    if (code == 61 || code == 63 || code == 65) return 'Rain';
+    if (code == 66 || code == 67) return 'Freezing rain';
+    if (code == 71 || code == 73 || code == 75) return 'Snow';
+    if (code == 80 || code == 81 || code == 82) return 'Showers';
+    if (code == 95) return 'Thunderstorm';
+    if (code == 96 || code == 99) return 'Thunderstorm with hail';
+    return 'Weather';
   }
 }
