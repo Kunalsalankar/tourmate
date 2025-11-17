@@ -23,7 +23,6 @@ import '../cubit/location_comment_cubit.dart';
 import 'location_comments_screen.dart';
 import '../presentation/screens/notification_screen.dart';
 import 'trip_map_screen.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../GEMIN_API/trip_planner_chat.dart';
 
 /// User Home Screen with trip creation and management functionality
@@ -288,17 +287,10 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
   }
 
   void _openTravelAssistant() {
-    final key = dotenv.env['GEMINI_API_KEY'] ?? '';
-    if (key.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Gemini API key is missing. Set GEMINI_API_KEY in .env')),
-      );
-      return;
-    }
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => TripPlannerChat(apiKey: key),
+        builder: (context) => const TripPlannerChat(),
       ),
     );
   }
