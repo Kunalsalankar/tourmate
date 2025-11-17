@@ -1,6 +1,7 @@
 // ignore_for_file: unnecessary_cast
 
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/trip_model.dart';
 
@@ -86,39 +87,59 @@ class TripRepository {
       if (userId == null) {
         throw Exception('User not authenticated');
       }
-
-      final now = DateTime.now();
       Query query = _firestore
           .collection(_collectionName)
           .where('userId', isEqualTo: userId);
 
-      // Apply date filters based on trip type
+      // Filter by stored tripType to ensure correct classification
       switch (type) {
         case 'active':
-          // Active trips are those that have started but not yet ended
-          query = query
-              .where('time', isLessThanOrEqualTo: Timestamp.fromDate(now))
-              .where('time', isGreaterThanOrEqualTo: Timestamp.fromDate(now.subtract(const Duration(days: 1))));
+          query = query.where('tripType', isEqualTo: 'active');
           break;
         case 'past':
-          // Past trips are those that ended before now
-          query = query.where('time', isLessThan: Timestamp.fromDate(now));
+          query = query.where('tripType', isEqualTo: 'past');
           break;
         case 'future':
-          // Future trips are those that start after now
-          query = query.where('time', isGreaterThan: Timestamp.fromDate(now));
+          query = query.where('tripType', isEqualTo: 'future');
           break;
         default:
-          // Default to all trips
           break;
       }
 
-      query = query.orderBy('time', descending: false);
+      // Consistent ordering with user trips
+      query = query.orderBy('createdAt', descending: true);
       final querySnapshot = await query.get();
 
       return querySnapshot.docs
           .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
           .toList();
+    } on FirebaseException catch (e) {
+      // Graceful fallback when a composite index is required but missing
+      final needsIndex = e.code == 'failed-precondition' &&
+          (e.message?.toLowerCase().contains('requires an index') ?? false);
+
+      if (needsIndex) {
+        final userId = currentUserId;
+        if (userId == null) {
+          throw Exception('User not authenticated');
+        }
+        // Fallback: fetch by userId and order, filter by tripType client-side
+        final qs = await _firestore
+            .collection(_collectionName)
+            .where('userId', isEqualTo: userId)
+            .orderBy('createdAt', descending: true)
+            .get();
+        final all = qs.docs
+            .map((doc) => TripModel.fromMap(doc.data() as Map<String, dynamic>, doc.id))
+            .toList();
+        if (type == 'active' || type == 'past' || type == 'future') {
+          return all
+              .where((t) => t.tripType.toString().split('.').last == type)
+              .toList();
+        }
+        return all;
+      }
+      throw Exception('Failed to get $type trips: ${e.message ?? e.code}');
     } catch (e) {
       throw Exception('Failed to get $type trips: $e');
     }

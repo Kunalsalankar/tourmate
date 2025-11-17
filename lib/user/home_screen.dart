@@ -150,7 +150,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                       ),
                       tooltip: 'Travel Assistant',
                     ),
-                    if (_envInfo != null && _envInfo!.temperatureC != null)
+                    if (_envInfo != null)
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: InkWell(
@@ -158,21 +158,21 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: Colors.blue.withValues(alpha: 0.12),
+                              color: Colors.white.withValues(alpha: 0.18),
                               borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: Colors.blue.withValues(alpha: 0.4)),
+                              border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
                             ),
                             child: Row(
                               mainAxisSize: MainAxisSize.min,
                               children: [
-                                const Icon(Icons.wb_sunny, size: 14, color: Colors.blue),
+                                const Icon(Icons.wb_sunny, size: 14, color: Colors.white),
                                 const SizedBox(width: 4),
                                 Text(
-                                  '${_envInfo!.temperatureC!.toStringAsFixed(0)}°C',
+                                  '${_envInfo!.temperatureC != null ? _envInfo!.temperatureC!.toStringAsFixed(0) : '--'}°C',
                                   style: const TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
-                                    color: Colors.blue,
+                                    color: Colors.white,
                                   ),
                                 ),
                               ],
@@ -180,7 +180,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                           ),
                         ),
                       ),
-                    if (_envInfo != null && _envInfo!.aqi != null)
+                    if (_envInfo != null)
                       Padding(
                         padding: const EdgeInsets.only(right: 8),
                         child: InkWell(
@@ -198,7 +198,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
                                 const Icon(Icons.air, size: 14, color: Colors.white),
                                 const SizedBox(width: 4),
                                 Text(
-                                  'AQI ${_envInfo!.aqi}',
+                                  'AQI ${_envInfo!.aqi ?? '--'}',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.w600,
@@ -346,63 +346,59 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
           if (_envInfo != null)
             Row(
               children: [
-                if (_envInfo!.temperatureC != null)
-                  InkWell(
-                    onTap: _fetchEnvironment,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.blue.withValues(alpha: 0.12),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.blue.withValues(alpha: 0.4)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.wb_sunny, size: 16, color: Colors.blue),
-                          const SizedBox(width: 6),
-                          Text(
-                            '${_envInfo!.temperatureC!.toStringAsFixed(0)}°C'
-                            '${_envInfo!.weatherDescription != null ? ' • ${_envInfo!.weatherDescription}' : ''}',
-                            style: const TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.blue,
-                            ),
+                InkWell(
+                  onTap: _fetchEnvironment,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.wb_sunny, size: 16, color: Colors.white),
+                        const SizedBox(width: 6),
+                        Text(
+                          '${_envInfo!.temperatureC != null ? _envInfo!.temperatureC!.toStringAsFixed(0) : '--'}°C${_envInfo!.weatherDescription != null ? ' • ${_envInfo!.weatherDescription}' : ''}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
-                if (_envInfo!.temperatureC != null) const SizedBox(width: 8),
-                if (_envInfo!.aqi != null)
-                  InkWell(
-                    onTap: _fetchEnvironment,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
-                      ),
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          const Icon(Icons.air, size: 16, color: Colors.white),
-                          const SizedBox(width: 6),
-                          Text(
-                            'AQI ${_envInfo!.aqi}'
-                            '${_envInfo!.aqiCategory != null ? ' • ${_envInfo!.aqiCategory}' : ''}',
-                            style: TextStyle(
-                              fontSize: 13,
-                              fontWeight: FontWeight.w600,
-                              color: Colors.white,
-                            ),
+                ),
+                const SizedBox(width: 8),
+                InkWell(
+                  onTap: _fetchEnvironment,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withValues(alpha: 0.18),
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.white.withValues(alpha: 0.35)),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Icon(Icons.air, size: 16, color: Colors.white),
+                        const SizedBox(width: 6),
+                        Text(
+                          'AQI ${_envInfo!.aqi ?? '--'}${_envInfo!.aqiCategory != null ? ' • ${_envInfo!.aqiCategory}' : ''}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                            color: Colors.white,
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   ),
+                ),
               ],
             ),
         ],
@@ -1329,6 +1325,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
             onPressed: () {
               Navigator.of(context).pop();
               _tripCubit.endTrip(trip.id!);
+              _loadTrips();
               
               // Show success message
               ScaffoldMessenger.of(context).showSnackBar(
@@ -1496,6 +1493,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               // End trip without updating destination
               Navigator.of(context).pop();
               _tripCubit.endTrip(trip.id!);
+              _loadTrips();
               
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
@@ -1544,6 +1542,7 @@ class _UserHomeScreenState extends State<UserHomeScreen> {
               );
               
               _tripCubit.updateTrip(trip.id!, updatedTrip);
+              _loadTrips();
               
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(

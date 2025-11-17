@@ -25,7 +25,7 @@ class EnvironmentService {
   EnvironmentService._internal();
 
   String? _apiKey() {
-    final k = dotenv.env['WEATHER_API_KEY'] ??
+    final k = dotenv.env['WEATHER_API'] ??
         dotenv.env['GOOGLE_API_KEY'] ??
         dotenv.env['GOOGLE_MAPS_API_KEY'] ??
         dotenv.env['AIR_QUALITY_API_KEY'];
