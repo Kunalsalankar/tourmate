@@ -12,6 +12,8 @@ import '../core/repositories/location_comment_repository.dart';
 import '../core/navigation/app_router.dart';
 import '../cubit/location_comment_cubit.dart';
 import '../user/location_comments_screen.dart';
+import '../screens/recent_data_screen.dart';
+import 'analytics_screen.dart';
 
 /// Production-ready Admin screen for comprehensive trip management
 /// Features:
@@ -160,6 +162,10 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
                 ],
               ),
             ),
+            // Analysis dashboard
+            const AnalyticsScreen(),
+            // Recent Data dashboard
+            const RecentDataScreen(),
             // Comments (reuse existing screen)
             const LocationCommentsScreen(),
           ],
@@ -170,13 +176,22 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
           backgroundColor: AppColors.surface,
           selectedItemColor: AppColors.primary,
           unselectedItemColor: AppColors.textSecondary,
+          type: BottomNavigationBarType.fixed,
           items: const [
             BottomNavigationBarItem(
               icon: Icon(Icons.home),
               label: 'Home',
             ),
             BottomNavigationBarItem(
-              icon: Icon(Icons.location_on),
+              icon: Icon(Icons.analytics),
+              label: 'Analysis',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.update),
+              label: 'Recent Data',
+            ),
+            BottomNavigationBarItem(
+              icon: Icon(Icons.comment),
               label: 'Comments',
             ),
           ],
