@@ -1,12 +1,15 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/checkpoint_model.dart';
+import '../../services/analytics_service.dart';
 
 class CheckpointRepository {
   final FirebaseFirestore _firestore;
   final String collectionName = 'checkpoints';
+  final AnalyticsService _analytics;
 
-  CheckpointRepository({FirebaseFirestore? firestore}) 
-      : _firestore = firestore ?? FirebaseFirestore.instance;
+  CheckpointRepository({FirebaseFirestore? firestore, AnalyticsService? analytics}) 
+      : _firestore = firestore ?? FirebaseFirestore.instance,
+        _analytics = analytics ?? AnalyticsService();
 
   // Add a new checkpoint to Firestore
   Future<void> addCheckpoint(CheckpointModel checkpoint) async {
@@ -15,6 +18,7 @@ class CheckpointRepository {
           .collection(collectionName)
           .doc(checkpoint.id)
           .set(checkpoint.toMap());
+      await _analytics.logCheckpoint(checkpoint);
     } catch (e) {
       throw Exception('Failed to add checkpoint: $e');
     }

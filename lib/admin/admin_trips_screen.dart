@@ -111,6 +111,12 @@ class _AdminTripsScreenState extends State<AdminTripsScreen> with SingleTickerPr
                     icon: const Icon(Icons.flag, color: AppColors.appBarText),
                     tooltip: 'Checkpoints',
                   ),
+                  // Research analytics (OD, time-series)
+                  IconButton(
+                    onPressed: () => Navigator.of(context).pushNamed(AppRouter.adminResearchAnalytics),
+                    icon: const Icon(Icons.science, color: AppColors.appBarText),
+                    tooltip: 'Research Analytics',
+                  ),
                   // View mode toggle
                   IconButton(
                     onPressed: () {

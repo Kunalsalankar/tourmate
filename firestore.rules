@@ -119,6 +119,122 @@ service cloud.firestore {
     // ------------------------
     match /users/{userId} {
       allow read, write: if isSignedIn() && request.auth.uid == userId;
+      match /trips/{tripId} {
+        allow read: if isSignedIn() && request.auth.uid == userId;
+        allow create: if isSignedIn()
+          && request.auth.uid == userId
+          && request.resource.data.userId == userId;
+        allow update, delete: if isSignedIn() && request.auth.uid == userId;
+        match /checkpoints/{checkpointId} {
+          allow read: if isSignedIn() && request.auth.uid == userId;
+          allow create: if isSignedIn()
+            && request.auth.uid == userId
+            && request.resource.data.lat is number
+            && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
+            && request.resource.data.lng is number
+            && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
+            && request.resource.data.recordedAt is timestamp;
+          allow update, delete: if false;
+        }
+        match /comments/{commentId} {
+          allow read: if isSignedIn() && request.auth.uid == userId;
+          allow write: if isSignedIn() && request.auth.uid == userId;
+        }
+      }
+      match /latest_location/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == userId;
+      }
+    }
+    // Analytics-friendly time-series and history collections
+    match /trip_location_history/{tripId}/positions/{posId} {
+      allow read: if isSignedIn() && (isTripOwner(tripId) || isAdmin());
+      allow create: if isSignedIn()
+        && isTripOwner(tripId)
+        && request.resource.data.driverId == request.auth.uid
+        && request.resource.data.lat is number
+        && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
+        && request.resource.data.lng is number
+        && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
+        && request.resource.data.recordedAt is timestamp;
+      allow update, delete: if false;
+    }
+    match /comments/{commentId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.tripId is string
+        && request.resource.data.timestamp is timestamp;
+      allow update, delete: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || isAdmin());
+    }
+    match /ts_trips/{date}/users/{userId}/events/{eventId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.userId == userId
+        && request.resource.data.time is timestamp
+        && (request.resource.data.type == 'start' || request.resource.data.type == 'end');
+    }
+    match /ts_checkpoints/{date}/users/{userId}/events/{eventId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.userId == userId
+        && request.resource.data.lat is number
+        && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
+        && request.resource.data.lng is number
+        && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
+        && request.resource.data.recordedAt is timestamp;
+    }
+    match /ts_locations/{date}/users/{userId}/trips/{tripId}/positions/{posId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.userId == userId
+        && request.resource.data.lat is number
+        && request.resource.data.lat >= -90 && request.resource.data.lat <= 90
+        && request.resource.data.lng is number
+        && request.resource.data.lng >= -180 && request.resource.data.lng <= 180
+        && request.resource.data.recordedAt is timestamp;
+    }
+    match /od_daily/{date}/users/{userId}/trips/{tripId} {
+      allow read: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow write: if isSignedIn()
+        && request.auth.uid == userId
+        && request.resource.data.userId == userId
+        && request.resource.data.origin is string
+        && request.resource.data.destination is string
+        && request.resource.data.mode is string
+        && request.resource.data.startTime is timestamp
+        && request.resource.data.endTime is timestamp;
+    }
+    match /od_flat/{docId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow write: if isSignedIn()
+        && request.resource.data.userId == request.auth.uid
+        && request.resource.data.dateKey is string
+        && request.resource.data.origin is string
+        && request.resource.data.destination is string
+        && request.resource.data.mode is string
+        && request.resource.data.startTime is timestamp
+        && request.resource.data.endTime is timestamp;
+    }
+    match /searchLogs/{docId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+    }
+    match /navigationLogs/{docId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+    }
+    match /notificationLogs/{docId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+    }
+    match /appPerformance/{docId} {
+      allow read: if isSignedIn() && (isAdmin() || resource.data.userId == request.auth.uid);
+    }
+    match /auto_trips/{tripId} {
+      allow read: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
+      allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+      allow update, delete: if isSignedIn() && (resource.data.userId == request.auth.uid || isAdmin());
     }
   }
 }

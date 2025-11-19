@@ -13,6 +13,7 @@ import '../../admin/admin_location_dashboard.dart';
 import '../../admin/admin_trips_screen.dart';
 import '../../admin/admin_checkpoints_screen.dart';
 import '../../admin/analytics_screen.dart';
+import '../../admin/research_analytics_screen.dart';
 
 class AppRouter {
   static const String splash = '/';
@@ -27,6 +28,7 @@ class AppRouter {
   static const String adminLocations = '/admin-locations';
   static const String adminCheckpoints = '/admin-checkpoints';
   static const String adminAnalytics = '/admin-analytics';
+  static const String adminResearchAnalytics = '/admin-research-analytics';
 
   static Route<dynamic> generateRoute(RouteSettings settings) {
     switch (settings.name) {
@@ -95,6 +97,11 @@ class AppRouter {
       case adminAnalytics:
         return MaterialPageRoute(
           builder: (_) => const AnalyticsScreen(),
+          settings: settings,
+        );
+      case adminResearchAnalytics:
+        return MaterialPageRoute(
+          builder: (_) => const ResearchAnalyticsScreen(),
           settings: settings,
         );
       default:

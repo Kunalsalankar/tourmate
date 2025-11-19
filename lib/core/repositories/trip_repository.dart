@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import '../models/trip_model.dart';
+import '../../services/analytics_service.dart';
 
 /// Repository class for handling Trip-related Firestore operations
 /// This class provides methods to interact with the Firestore database
@@ -13,8 +14,12 @@ import '../models/trip_model.dart';
 class TripRepository {
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final AnalyticsService _analytics;
 
   static const String _collectionName = 'trips';
+
+  TripRepository({AnalyticsService? analyticsService})
+      : _analytics = analyticsService ?? AnalyticsService();
 
   /// Get current user ID
   String? get currentUserId => _auth.currentUser?.uid;
@@ -36,6 +41,18 @@ class TripRepository {
       };
 
       final docRef = await _firestore.collection(_collectionName).add(data);
+      await _analytics.writeUserTrip(userId, docRef.id, data);
+      await _analytics.logTripEvent(
+        userId: userId,
+        tripId: docRef.id,
+        type: 'start',
+        time: trip.time,
+        extra: {
+          'mode': trip.mode,
+          'origin': trip.origin,
+          'destination': trip.destination,
+        },
+      );
       return docRef.id;
     } catch (e) {
       throw Exception('Failed to create trip: $e');
@@ -177,6 +194,21 @@ class TripRepository {
       };
 
       await _firestore.collection(_collectionName).doc(tripId).update(data);
+      await _analytics.writeUserTrip(userId, tripId, data);
+      if (trip.tripType == TripType.past) {
+        await _analytics.logTripEvent(
+          userId: userId,
+          tripId: tripId,
+          type: 'end',
+          time: trip.endTime ?? DateTime.now(),
+          extra: {
+            'mode': trip.mode,
+            'origin': trip.origin,
+            'destination': trip.destination,
+          },
+        );
+        await _analytics.logOdDaily(trip: trip, userId: userId, tripId: tripId);
+      }
     } catch (e) {
       throw Exception('Failed to update trip: $e');
     }

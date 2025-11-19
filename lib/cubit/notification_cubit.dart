@@ -11,6 +11,7 @@ import 'package:uuid/uuid.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 
 import '../core/models/checkpoint_model.dart';
+import '../core/repositories/checkpoint_repository.dart';
 
 abstract class CheckpointEvent {
   const CheckpointEvent();
@@ -131,8 +132,11 @@ class NotificationCubit extends Cubit<NotificationState> {
   bool _activeTripMissingNotified = false;
   bool _isWritingCheckpoint = false;
   String? _lastActiveTripId;
+  final CheckpointRepository _checkpointRepository;
 
-  NotificationCubit() : super(NotificationState()) {
+  NotificationCubit({CheckpointRepository? checkpointRepository})
+      : _checkpointRepository = checkpointRepository ?? CheckpointRepository(),
+        super(NotificationState()) {
     _initializeLocationService();
   }
 
@@ -303,10 +307,7 @@ class NotificationCubit extends Cubit<NotificationState> {
 
       // Save to Firestore with a timeout guard
       debugPrint('[Checkpoint] Writing doc $checkpointId at ${_lastKnownPosition!.latitude}, ${_lastKnownPosition!.longitude}');
-      await FirebaseFirestore.instance
-          .collection('checkpoints')
-          .doc(checkpointId)
-          .set(newCheckpoint.toMap())
+      await _checkpointRepository.addCheckpoint(newCheckpoint)
           .timeout(const Duration(seconds: 8));
       debugPrint('[Checkpoint] Write success: $checkpointId');
           
@@ -352,14 +353,65 @@ class NotificationCubit extends Cubit<NotificationState> {
         return;
       }
 
-      final query = await FirebaseFirestore.instance
-          .collection('trips')
-          .where('userId', isEqualTo: userId)
-          .where('tripType', isEqualTo: 'active')
-          .limit(1)
-          .get();
+      QuerySnapshot<Map<String, dynamic>>? query;
+      QueryDocumentSnapshot<Map<String, dynamic>>? selectedDoc;
+      try {
+        // Primary: equality filters only (should not need composite)
+        final qs = await FirebaseFirestore.instance
+            .collection('trips')
+            .where('userId', isEqualTo: userId)
+            .where('tripType', isEqualTo: 'active')
+            .limit(1)
+            .get();
+        if (qs.docs.isNotEmpty) {
+          selectedDoc = qs.docs.first;
+        }
+        query = qs;
+      } on FirebaseException catch (e) {
+        final needsIndex = e.code == 'failed-precondition' &&
+            (e.message?.toLowerCase().contains('requires an index') ?? false);
+        if (needsIndex) {
+          try {
+            // Fallback 1: rely on existing common index (userId, createdAt)
+            final qs = await FirebaseFirestore.instance
+                .collection('trips')
+                .where('userId', isEqualTo: userId)
+                .orderBy('createdAt', descending: true)
+                .limit(10)
+                .get();
+            if (qs.docs.isNotEmpty) {
+              selectedDoc = qs.docs.firstWhere(
+                (d) => (d.data()['tripType'] ?? 'active') == 'active',
+                orElse: () => qs.docs.first,
+              );
+            } else {
+              selectedDoc = null;
+            }
+            query = qs;
+          } catch (_) {
+            // Fallback 2: simplest query by userId only, then pick active client-side
+            final qs = await FirebaseFirestore.instance
+                .collection('trips')
+                .where('userId', isEqualTo: userId)
+                .limit(10)
+                .get();
+            if (qs.docs.isNotEmpty) {
+              selectedDoc = qs.docs.firstWhere(
+                (d) => (d.data()['tripType'] ?? 'active') == 'active',
+                orElse: () => qs.docs.first,
+              );
+            } else {
+              selectedDoc = null;
+            }
+            query = qs;
+          }
+        } else {
+          rethrow;
+        }
+      }
 
-      if (query.docs.isEmpty) {
+      // If result empty or we fetched a broader set, pick the first active
+      if (query == null || query.docs.isEmpty) {
         _activeTripData = null;
         _lastActiveTripId = null;
         emit(state.copyWith(
@@ -370,8 +422,13 @@ class NotificationCubit extends Cubit<NotificationState> {
         ));
         return;
       }
-
-      final doc = query.docs.first;
+      // Safe non-null reference after guard
+      final q = query;
+      // Prefer active; otherwise first
+      final doc = selectedDoc ?? q.docs.firstWhere(
+        (d) => (d.data()['tripType'] ?? 'active') == 'active',
+        orElse: () => q.docs.first,
+      );
       final data = doc.data();
       final timestamp = data['time'];
       DateTime? scheduled;

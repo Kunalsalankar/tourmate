@@ -4,6 +4,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import '../core/colors.dart';
 import 'package:fl_chart/fl_chart.dart';
 import '../core/services/export_service.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 class RecentDataScreen extends StatefulWidget {
   const RecentDataScreen({super.key});
@@ -49,12 +50,46 @@ class _RecentDataScreenState extends State<RecentDataScreen> {
 
     try {
       final firestore = FirebaseFirestore.instance;
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      bool isAdmin = false;
+      if (uid != null) {
+        try {
+          final u = await firestore.collection('users').doc(uid).get();
+          final d = u.data();
+          if (d != null && d['role'] == 'admin') {
+            isAdmin = true;
+          }
+        } catch (_) {}
+      }
+
+      Query<Map<String, dynamic>> buildQuery(String collection) {
+        Query<Map<String, dynamic>> q = firestore.collection(collection);
+        if (!isAdmin && uid != null) {
+          q = q.where('userId', isEqualTo: uid);
+        }
+        return q.orderBy('timestamp', descending: true).limit(500);
+      }
+
+      Future<QuerySnapshot<Map<String, dynamic>>> fetch(String collection) async {
+        try {
+          return await buildQuery(collection).get();
+        } on FirebaseException catch (e) {
+          if (e.code == 'failed-precondition') {
+            Query<Map<String, dynamic>> q = firestore.collection(collection);
+            if (!isAdmin && uid != null) {
+              q = q.where('userId', isEqualTo: uid);
+            }
+            return q.limit(500).get();
+          }
+          rethrow;
+        }
+      }
 
       final futures = await Future.wait([
-        firestore.collection('searchLogs').orderBy('timestamp', descending: true).limit(500).get(),
-        firestore.collection('navigationLogs').orderBy('timestamp', descending: true).limit(500).get(),
-        firestore.collection('notificationLogs').orderBy('timestamp', descending: true).limit(500).get(),
-        firestore.collection('appPerformance').orderBy('timestamp', descending: true).limit(500).get(),
+        fetch('searchLogs'),
+        fetch('navigationLogs'),
+        fetch('notificationLogs'),
+        fetch('appPerformance'),
       ]);
 
       final searchSnap = futures[0] as QuerySnapshot<Map<String, dynamic>>;
@@ -489,50 +524,56 @@ class _RecentDataScreenState extends State<RecentDataScreen> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Top searched locations',
-                    style: TextStyle(
-                      color: AppColors.textSecondary,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ..._topSearchLocations.map(
-                    (e) => Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 2),
-                      child: Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              e.key,
-                              style: TextStyle(color: AppColors.textPrimary),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            e.value.toString(),
-                            style: TextStyle(
-                              color: AppColors.textSecondary,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ],
+              child: SizedBox(
+                height: 140,
+                child: SingleChildScrollView(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Top searched locations',
+                        style: TextStyle(
+                          color: AppColors.textSecondary,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      ..._topSearchLocations.map(
+                        (e) => Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 2),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  e.key,
+                                  style: TextStyle(color: AppColors.textPrimary),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                e.value.toString(),
+                                style: TextStyle(
+                                  color: AppColors.textSecondary,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                      if (_topSearchLocations.isEmpty)
+                        Text(
+                          'No search data',
+                          style: TextStyle(color: AppColors.textSecondary),
+                        ),
+                    ],
                   ),
-                  if (_topSearchLocations.isEmpty)
-                    Text(
-                      'No search data',
-                      style: TextStyle(color: AppColors.textSecondary),
-                    ),
-                ],
+                ),
               ),
             ),
             const SizedBox(width: 16),
